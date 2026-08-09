@@ -1,0 +1,95 @@
+﻿@page "/accounts"
+@using TGA.Contract.Abstractions
+@inject ITelegramAuthService Auth
+@inject IAccountStorageService AccountStorage
+@inject NavigationManager Nav
+
+<PageTitle>Аккаунты</PageTitle>
+
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Аккаунты</MudText>
+    
+    <MudList T="object">
+        @foreach (var acc in _accounts)
+        {
+            <MudListItem>
+                <div class="d-flex align-center justify-space-between">
+                    <div class="d-flex">
+                        <MudAvatar Color="Color.Primary" Class="mr-3">@GetInitials(acc.DisplayName)</MudAvatar>
+                        <div>
+                            <MudText>
+                                @acc.DisplayName
+                            </MudText>
+                            <MudText Typo="Typo.caption">@acc.PhoneNumber</MudText>
+                        </div>
+                    </div>
+                    <div>
+                        @if (acc.IsActive)
+                        {
+                            <MudChip Class="ml-4" Variant="Variant.Outlined" Color="@(acc.IsActive ? Color.Success : Color.Transparent)" T="string">@(acc.IsActive ? "активен" : "")</MudChip>
+                        }
+                        @if (!acc.IsActive)
+                        {
+                            <MudButton Size="Size.Small"  OnClick="() => Switch(acc.Id)">Переключиться</MudButton>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                       OnClick="() => Delete(acc.Id)"/>
+                    </div>
+                </div>
+            </MudListItem>
+        }
+    </MudList>
+
+    <MudDivider Class="my-4" />
+
+    <div class="d-flex align-center justify-space-between">
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="AddAccount">Добавить ещё аккаунт</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Class="ml-2" OnClick="Logout">Выйти</MudButton>
+    </div>
+</MudContainer>
+
+@code {
+    private List<Contract.DTOs.AccountDto> _accounts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+    }
+
+    private async Task Refresh() => _accounts = await AccountStorage.GetAllAccountsAsync();
+
+    private async Task Switch(int id)
+    {
+        await Auth.SwitchAccountAsync(id);
+        Nav.NavigateTo("/login");
+        StateHasChanged();
+    }
+
+    private async Task Delete(int id)
+    {
+        await AccountStorage.DeleteAsync(id);
+        await Refresh();
+    }
+
+    private async Task AddAccount()
+    {
+        Nav.NavigateTo("/login");
+    }
+
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/login");
+    }
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
+        };
+    }
+}

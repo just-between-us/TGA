@@ -1,0 +1,288 @@
+﻿@page "/chats"
+@using Microsoft.Extensions.Options
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
+@using TGA.Contract.Options
+@using TGA.UI.Utils
+@inject IMessageStorageService Storage
+@inject IAccountStorageService Accounts
+@inject ITelegramMessageService TelegramSvc
+@inject NavigationManager NavigationManager
+@inject IOptions<HistoryLoadOptions> HistoryOptions
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<PageTitle>Чаты</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.False" Class="mt-4" Style="height: calc(100vh - 100px);">
+    <MudGrid Style="height: 100%;">
+
+        @* Левая панель — список контактов *@
+        <MudItem  xs="12" md="4" Style="height: 100%;">
+            <MudPaper Class="d-flex flex-column" Style="height: 100%;" Elevation="2">
+                <div class="pa-3">
+                    <MudTextField T="string" Placeholder="Поиск чата" Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Value="_search" ValueChanged="OnSearchChanged"
+                                  Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+
+                @if (_loadingContacts)
+                {
+                    <MudProgressLinear Indeterminate="true" Class="mt-2" />
+                }
+                else if (FilteredChats.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Class="pa-4" Color="Color.Surface">
+                        @(_chats.Count == 0 ? "Пока нет сообщений. Загрузите историю на странице входа." : "Ничего не найдено")
+                    </MudText>
+                }
+                else
+                {
+                    <MudList T="long" Style="overflow-y: auto; flex: 1;">
+                        @foreach (var chat in FilteredChats)
+                        {
+                            <MudListItem T="long"
+                                         OnClick="() => SelectChat(chat.PeerUserId)"
+                                         Class="@(chat.PeerUserId == _selectedPeerId ? "mud-selected-item" : "")">
+                                <div class="d-flex align-center" style="width: 100%;">
+                                    <MudAvatar Color="Color.Primary" Class="mr-3">
+                                        @GetInitials(chat.DisplayName)
+                                    </MudAvatar>
+                                    
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div class="d-flex justify-space-between">
+                                            <MudText Typo="Typo.subtitle2" Class="text-truncate">@chat.DisplayName</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Surface">
+                                                @FormatTime(chat.LastMessageTime)
+                                            </MudText>
+                                        </div>
+                                        <MudText Typo="Typo.body2" Color="Color.Surface" Class="text-truncate">
+                                            @(chat.LastMessageIsOutgoing ? "Вы: " : "")@StringHelper.Truncate(chat.LastMessageText, 50)
+                                        </MudText>
+                                    </div>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* Правая панель — переписка *@
+        <MudItem xs="12" md="8" Style="height: 100%;">
+            <MudPaper Class="d-flex flex-column" Style="height: 100%;" Elevation="2">
+
+                @if (_selectedPeerId is null)
+                {
+                    <div class="d-flex flex-column align-center justify-center" style="height: 100%;">
+                        <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Large" Color="Color.Secondary" />
+                        <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
+                            Выберите чат слева
+                        </MudText>
+                    </div>
+                }
+                else
+                {
+                    <div class="pa-3 d-flex align-center" style="border-bottom: 1px solid var(--mud-palette-lines-default);">
+                        <MudText Typo="Typo.h6">@_selectedName</MudText> 
+                    </div>
+                    <MudTooltip Color="Color.Info" Arrow="true" Placement="Placement.Left" Text="@(TelegramSvc.IsMonitoring ? "Сервис готов принять новые сообщения" : "Приём новых сообщений остановлен (из-за аккаунта или ошибки)")">
+                        <MudText Typo="Typo.caption" Class="ma-4" Color="Color.Surface">
+                            @(TelegramSvc.IsMonitoring ? "Жду сообщения..." : "Сообщения не получаются.")
+                        </MudText>
+                    </MudTooltip>
+
+                    <div id="message-list" class="pa-3" style="flex: 1; overflow-y: auto;">
+                        @if (_loadingMessages)
+                        {
+                            <MudProgressLinear Indeterminate="true" />
+                        }
+                        else if (_messages.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Сообщений пока нет</MudText>
+                        }
+                        else
+                        {
+                            @foreach (var msg in _messages)
+                            {
+                                <div class="d-flex @(msg.IsOutgoing ? "justify-end" : "justify-start") mb-2">
+                                    <MudPaper Class="pa-2 px-3"
+                                              Style="@BubbleStyle(msg.IsOutgoing)"
+                                              Outlined="true"
+                                              Elevation="1">
+                                        <MudText Style="white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;">@msg.Text</MudText>
+                                        <MudText Typo="Typo.caption"
+                                                 Style="@($"display:block; text-align:right; opacity:0.7;")">
+                                            @msg.Time.ToString("HH:mm")
+                                        </MudText>
+                                    </MudPaper>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="pa-3 d-flex" style="border-top: 1px solid var(--mud-palette-lines-default);">
+                        <MudTextField @bind-Value="_draft" Placeholder="Написать сообщение..."
+                                      Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Immediate="true" FullWidth="true" Class="mr-2"
+                                      OnKeyUp="OnDraftKeyUp" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary"
+                                       Disabled="@(string.IsNullOrWhiteSpace(_draft) || _sending)"
+                                       OnClick="SendMessageAsync" />
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private List<ChatSummaryDto> _chats = [];
+    private List<MessageDto> _messages = [];
+    private string _search = string.Empty;
+    private long? _selectedPeerId;
+    private string _selectedName = string.Empty;
+    private int _accountId;
+    private bool _loadingContacts = true;
+    private bool _loadingMessages;
+    private bool _sending;
+    private string _draft = string.Empty;
+    private int _historyLimit;
+
+    private List<ChatSummaryDto> FilteredChats =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _chats
+            : _chats.Where(c => c.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _historyLimit = HistoryOptions.Value.DefaultMessagesPerDialog;
+        
+        var active = await Accounts.GetActiveAccountAsync();
+        if (active is null)
+        {
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        _accountId = active.Id;
+        await RefreshChatsAsync();
+        _loadingContacts = false;
+
+        TelegramSvc.OnNewMessageReceived += OnNewMessage;
+    }
+
+    private async Task RefreshChatsAsync()
+    {
+        _chats = await Storage.GetChatSummariesAsync(_accountId);
+    }
+
+    private void OnSearchChanged(string value) => _search = value;
+
+    private async Task SelectChat(long peerUserId)
+    {
+        _selectedPeerId = peerUserId;
+        _selectedName = _chats.FirstOrDefault(c => c.PeerUserId == peerUserId)?.DisplayName ?? "Неизвестно";
+
+        _loadingMessages = true;
+        StateHasChanged();
+
+        _messages = await Storage.GetMessagesByPeerAsync(_accountId, peerUserId);
+        StateHasChanged();
+        await ScrollToBottomAsync();
+
+        _messages = await TelegramSvc.LoadChatHistoryAsync(peerUserId, _historyLimit);
+
+        _loadingMessages = false;
+        StateHasChanged();
+        await ScrollToBottomAsync();
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (_selectedPeerId is null || string.IsNullOrWhiteSpace(_draft)) return;
+
+        _sending = true;
+        var text = _draft;
+        _draft = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            await TelegramSvc.SendMessageAsync(_selectedPeerId.Value, text);
+        }
+        catch (Exception ex)
+        {
+            _draft = text;
+            Snackbar.Add($"Не удалось отправить: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _sending = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnDraftKeyUp(KeyboardEventArgs e)
+    {
+        if (e is { Key: "Enter", ShiftKey: false })
+            await SendMessageAsync();
+    }
+
+    private void OnNewMessage(MessageDto msg)
+    {
+        InvokeAsync(async () =>
+        {
+            await RefreshChatsAsync();
+
+            if (msg.PeerUserId == _selectedPeerId)
+            {
+                _messages.Add(msg);
+                StateHasChanged();
+                await ScrollToBottomAsync();
+            }
+            else
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "document.getElementById('message-list')?.scrollTo(0, document.getElementById('message-list').scrollHeight)");
+        }
+        catch { /* JS interop может быть недоступен в момент prerender — не критично */ }
+    }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
+        };
+    }
+
+    private static string FormatTime(DateTime time)
+    {
+        var now = DateTime.Now;
+        if (time.Date == now.Date) return time.ToString("HH:mm");
+        if (time.Date == now.Date.AddDays(-1)) return "Вчера";
+        return time.ToString("dd.MM.yy");
+    }
+
+    private static string BubbleStyle(bool isOutgoing) => isOutgoing
+        ? "background-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text); border-radius: 12px 12px 2px 12px; max-width: 70%;"
+        : "background-color: var(--mud-palette-background-grey); border-radius: 12px 12px 12px 2px; max-width: 70%;";
+
+    public void Dispose() => TelegramSvc.OnNewMessageReceived -= OnNewMessage;
+}

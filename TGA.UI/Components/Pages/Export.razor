@@ -1,0 +1,316 @@
+﻿@page "/export"
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
+@inject IExportImportService ExportImportService
+@inject IAccountStorageService AccountStorage
+@inject ISnackbar Snackbar
+
+<PageTitle>Анализ экспорта</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Анализ экспорта из телеграма</MudText>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+            <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".json">
+                <CustomContent>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               OnClick="@context.OpenFilePickerAsync"
+                               StartIcon="@Icons.Material.Filled.UploadFile">
+                        Выбрать result.json
+                    </MudButton>
+                </CustomContent>
+                <SelectedTemplate />
+            </MudFileUpload>
+
+            @if (_selectedFile is not null)
+            {
+                <MudText>@_selectedFile.Name (@FormatSize(_selectedFile.Size))</MudText>
+            }
+
+            <MudSpacer />
+
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Success"
+                       Disabled="@(_selectedFile is null || _isParsing || _activeAccountId is null)"
+                       OnClick="ParseAsync"
+                       StartIcon="@Icons.Material.Filled.PlayArrow">
+                Разобрать
+            </MudButton>
+
+            @if (_hasParsed)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Secondary"
+                           Disabled="@_isImporting"
+                           OnClick="ImportAsync"
+                           StartIcon="@Icons.Material.Filled.Save">
+                    @(_isImporting ? "Импорт..." : "Сохранить в базу")
+                </MudButton>
+            }
+        </MudStack>
+
+        @if (_activeAccountId is null)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mt-3">
+                Нет активного аккаунта — сначала войдите на странице <MudLink Href="/login">входа</MudLink>.
+            </MudAlert>
+        }
+
+        @if (_isParsing)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-3" />
+            <MudText Typo="Typo.body2" Class="mt-1">Парсинг файла...</MudText>
+        }
+
+        @if (_isImporting)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Tertiary" Class="mt-3" />
+            <MudText Typo="Typo.body2" Class="mt-1">@_importProgressText</MudText>
+        }
+
+        @if (_importSummary is not null)
+        {
+            <MudAlert Severity="Severity.Success" Class="mt-3">
+                Импортировано: @_importSummary.MessagesImported сообщений из @_importSummary.ChatsProcessed чатов
+                (пропущено дубликатов/системных: @_importSummary.MessagesSkipped)
+            </MudAlert>
+        }
+    </MudPaper>
+
+    @if (_hasParsed)
+    {
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" sm="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.subtitle2">Всего чатов</MudText>
+                    <MudText Typo="Typo.h5">@_chats.Count</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.subtitle2">Всего сообщений</MudText>
+                    <MudText Typo="Typo.h5">@_chats.Sum(c => c.Messages.Count)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.subtitle2">Личные чаты</MudText>
+                    <MudText Typo="Typo.h5">@_chats.Count(c => c.IsPersonalChat)</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.subtitle2">Будет импортировано</MudText>
+                    <MudText Typo="Typo.h5">@_chats.Where(c => c.IsPersonalChat).Sum(c => c.Messages.Count)</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudTextField T="string" Label="Поиск по названию чата" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Value="_search" ValueChanged="OnSearchChanged"
+                      Immediate="true" Class="mb-4" />
+
+        <MudTable Items="@FilteredChats" Hover="true" Bordered="true" Striped="true"
+                  Loading="@_isParsing" T="ChatPreviewDto" OnRowClick="OnRowClicked" RowClass="cursor-pointer">
+            <HeaderContent>
+                <MudTh>Название</MudTh>
+                <MudTh>Тип</MudTh>
+                <MudTh>Сообщений всего</MudTh>
+                <MudTh>Моих</MudTh>
+                <MudTh>Собеседника</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Название">@context.Name</MudTd>
+                <MudTd DataLabel="Тип">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.IsPersonalChat ? Color.Primary : Color.Default)">
+                        @GetChatTypeDisplay(context.Type)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Всего">@context.Messages.Count</MudTd>
+                <MudTd DataLabel="Моих">@context.MyMessagesCount</MudTd>
+                <MudTd DataLabel="Собеседника">@context.OtherMessagesCount</MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenChat(context))" />
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[]{10,25,50}" />
+            </PagerContent>
+        </MudTable>
+    }
+</MudContainer>
+
+<MudDialog @bind-Visible="_dialogVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_selectedChat?.Name)</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedChat is not null)
+        {
+            <MudTable Items="@_selectedChat.Messages" Dense="true" Hover="true" Height="60vh" FixedHeader="true">
+                <HeaderContent>
+                    <MudTh>Дата</MudTh>
+                    <MudTh>От кого</MudTh>
+                    <MudTh>Текст</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="Дата">@context.Date.ToString("dd.MM.yyyy HH:mm")</MudTd>
+                    <MudTd DataLabel="От">
+                        <MudChip T="string" Size="Size.Small" Color="@(context.IsFromMe ? Color.Success : Color.Default)">
+                            @context.From
+                        </MudChip>
+                    </MudTd>
+                    <MudTd DataLabel="Текст">@context.Text</MudTd>
+                </RowTemplate>
+                <PagerContent>
+                    <MudTablePager PageSizeOptions="new int[]{25,50,100}" />
+                </PagerContent>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseDialog">Закрыть</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private IBrowserFile? _selectedFile;
+    private bool _isParsing;
+    private bool _isImporting;
+    private bool _hasParsed;
+    private string _search = string.Empty;
+    private List<ChatPreviewDto> _chats = [];
+    private ChatPreviewDto? _selectedChat;
+    private bool _dialogVisible;
+    private int? _activeAccountId;
+    private ImportSummaryDto? _importSummary;
+    private string _importProgressText = string.Empty;
+
+    private readonly DialogOptions _dialogOptions = new()
+        { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var active = await AccountStorage.GetActiveAccountAsync();
+        _activeAccountId = active?.Id;
+    }
+
+    private IEnumerable<ChatPreviewDto> FilteredChats =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _chats
+            : _chats.Where(c => c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private void OnFileSelected(IBrowserFile file) => _selectedFile = file;
+
+    private void OnSearchChanged(string value) => _search = value;
+
+    private async Task ParseAsync()
+    {
+        if (_selectedFile is null || _activeAccountId is null) return;
+
+        _isParsing = true;
+        _importSummary = null;
+        StateHasChanged();
+
+        try
+        {
+            var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
+
+            await using (var stream = _selectedFile.OpenReadStream(maxAllowedSize: 500_000_000))
+            await using (var fileStream = File.Create(tempPath))
+            {
+                await stream.CopyToAsync(fileStream);
+            }
+
+            _chats = await ExportImportService.ParseAsync(tempPath, _activeAccountId.Value);
+
+            File.Delete(tempPath);
+
+            _hasParsed = true;
+            Snackbar.Add($"Готово! Обработано чатов: {_chats.Count}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при парсинге: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isParsing = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_activeAccountId is null || _chats.Count == 0) return;
+
+        _isImporting = true;
+        StateHasChanged();
+
+        try
+        {
+            var progress = new Progress<string>(msg =>
+                InvokeAsync(() => { _importProgressText = msg; StateHasChanged(); }));
+
+            _importSummary = await ExportImportService.ImportAsync(_chats, _activeAccountId.Value, progress);
+
+            Snackbar.Add(
+                $"Сохранено {_importSummary.MessagesImported} сообщений из {_importSummary.ChatsProcessed} чатов",
+                Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка при импорте: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isImporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnRowClicked(TableRowClickEventArgs<ChatPreviewDto> args) => OpenChat(args.Item);
+
+    private void OpenChat(ChatPreviewDto chat)
+    {
+        _selectedChat = chat;
+        _dialogVisible = true;
+    }
+
+    private void CloseDialog() => _dialogVisible = false;
+
+    private static string FormatSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+    private static string GetChatTypeDisplay(string type)
+    {
+        return type switch
+        {
+            "personal_chat" => "Персональный чат",
+            "group_chat"    => "Групповой чат",
+            "supergroup"    => "Супергруппа",
+            "channel"       => "Канал",
+            "chat"          => "Группа",
+            "private_group" => "Приватная группа",
+            "public_group"  => "Публичная группа",
+            "private_supergroup" => "Приватная супергруппа",
+            "public_supergroup"  => "Публичная супергруппа",
+            _ => type 
+        };
+    }
+}

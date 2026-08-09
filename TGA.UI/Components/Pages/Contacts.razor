@@ -1,0 +1,235 @@
+﻿@page "/contacts"
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
+@inject IContactProfileStorageService ProfileStorage
+@inject IContactStorageService ContactStorage
+@inject ITelegramMessageService TelegramSvc
+@inject IAccountStorageService Accounts
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+
+<PageTitle>Контакты</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <div class="d-flex align-center mb-4">
+        <MudText Typo="Typo.h4">Контакты</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Sync"
+                   Disabled="@_syncing"
+                   OnClick="SyncContactsAsync">
+            @(_syncing ? "Синхронизация..." : "Синхронизировать из Telegram")
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" />
+    }
+    else if (_contacts.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info">
+            Контактов пока нет. Нажмите «Синхронизировать из Telegram» или загрузите историю сообщений.
+        </MudAlert>
+    }
+    else
+    {
+        <MudTextField T="string" Placeholder="Поиск контакта" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Value="_search" ValueChanged="v => _search = v"
+                      Immediate="true" Class="mb-4" />
+
+        <MudTable Items="@Filtered" Hover="true" Bordered="true" Striped="true" T="ContactProfileDto">
+            <HeaderContent>
+                <MudTh>Имя</MudTh>
+                <MudTh>Автоответчик</MudTh>
+                <MudTh>Обновлено</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Имя">@context.DisplayName</MudTd>
+                <MudTd DataLabel="Автоответчик">
+                    @if (context.AutoReplyEnabled)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">включён</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default">выключен</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Обновлено">
+                    @(context.UpdatedAt?.ToString("dd.MM.yy HH:mm") ?? "—")
+                </MudTd>
+                <MudTd>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => OpenEditor(context))" />
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+<MudDialog @bind-Visible="_editorVisible" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Редактирование контакта</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_editing is not null)
+        {
+            <div class="d-flex align-center mb-3" style="gap: 8px;">
+                <MudTextField @bind-Value="_displayName" Label="Имя контакта"
+                              Variant="Variant.Outlined" FullWidth="true" />
+                <MudTooltip Text="Подставить актуальное имя из Telegram">
+                    <MudIconButton Icon="@Icons.Material.Filled.Sync"
+                                   Disabled="@_resolvingName"
+                                   OnClick="ResolveNameFromTelegramAsync" />
+                </MudTooltip>
+            </div>
+
+            <MudTextField @bind-Value="_notes" Label="Заметки о собеседнике"
+                          Lines="3" Variant="Variant.Outlined" Class="mb-3" />
+
+            <MudTextField @bind-Value="_behaviorProfile" Label="Поведенческий профиль"
+                          Lines="4" Variant="Variant.Outlined" Class="mb-3"
+                          HelperText="Как человек обычно общается, его манера речи, паттерны поведения" />
+
+            <MudTextField @bind-Value="_communicationStyle" Label="Стиль общения"
+                          Variant="Variant.Outlined" Class="mb-3"
+                          HelperText="Кратко: формально/неформально, эмодзи, длина сообщений и т.п." />
+
+            <MudDivider Class="my-3" />
+
+            <MudSwitch @bind-Value="_autoReplyEnabled" Color="Color.Primary" Label="Разрешить автоответ этому контакту" />
+
+            <MudTextField @bind-Value="_autoReplyInstructions" Label="Доп. инструкция для автоответа"
+                          Lines="3" Variant="Variant.Outlined" Class="mt-3"
+                          Disabled="@(!_autoReplyEnabled)"
+                          HelperText="Добавляется к системному промпту именно для этого контакта" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _editorVisible = false)">Отмена</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync">Сохранить</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<ContactProfileDto> _contacts = [];
+    private string _search = string.Empty;
+    private bool _loading = true;
+    private bool _syncing;
+    private int _accountId;
+    private string _displayName = string.Empty;
+    private bool _resolvingName;
+
+    private bool _editorVisible;
+    private ContactProfileDto? _editing;
+    private string _notes = string.Empty;
+    private string _behaviorProfile = string.Empty;
+    private string _communicationStyle = string.Empty;
+    private bool _autoReplyEnabled;
+    private string _autoReplyInstructions = string.Empty;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+
+    private IEnumerable<ContactProfileDto> Filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _contacts
+            : _contacts.Where(c => c.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var active = await Accounts.GetActiveAccountAsync();
+        if (active is null)
+        {
+            NavigationManager.NavigateTo("/login");
+            return;
+        }
+
+        _accountId = active.Id;
+        await RefreshAsync();
+        _loading = false;
+    }
+
+    private async Task RefreshAsync() => _contacts = await ProfileStorage.GetAllAsync(_accountId);
+
+    private async Task SyncContactsAsync()
+    {
+        _syncing = true;
+        StateHasChanged();
+
+        try
+        {
+            var count = await TelegramSvc.SyncContactsAsync();
+            await RefreshAsync();
+            Snackbar.Add($"Синхронизировано контактов: {count}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка синхронизации: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _syncing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenEditor(ContactProfileDto contact)
+    {
+        _editing = contact;
+        _displayName = contact.DisplayName;
+        _notes = contact.Notes ?? string.Empty;
+        _behaviorProfile = contact.BehaviorProfile ?? string.Empty;
+        _communicationStyle = contact.CommunicationStyle ?? string.Empty;
+        _autoReplyEnabled = contact.AutoReplyEnabled;
+        _autoReplyInstructions = contact.AutoReplyInstructions ?? string.Empty;
+        _editorVisible = true;
+    }
+    
+    private async Task ResolveNameFromTelegramAsync()
+    {
+        if (_editing is null) return;
+
+        _resolvingName = true;
+        StateHasChanged();
+
+        try
+        {
+            var name = await TelegramSvc.ResolveUserDisplayNameAsync(_editing.PeerUserId);
+            if (name is not null)
+            {
+                _displayName = name;
+                Snackbar.Add("Имя обновлено из Telegram", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Не удалось получить имя из Telegram", Severity.Warning);
+            }
+        }
+        finally
+        {
+            _resolvingName = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null) return;
+
+        var active = await Accounts.GetActiveAccountAsync();
+        if (active is null) return;
+
+        await ContactStorage.RenameAsync(active.Id, _editing.PeerUserId, _displayName);
+        await ProfileStorage.SaveAsync(
+            _accountId, _editing.PeerUserId,
+            _notes, _behaviorProfile, _communicationStyle,
+            _autoReplyEnabled, _autoReplyInstructions);
+
+        _editorVisible = false;
+        await RefreshAsync();
+        Snackbar.Add("Контакт сохранён", Severity.Success);
+    }
+}
