@@ -1,9 +1,11 @@
 ﻿namespace TGA.Contract.DTOs;
 
 public record ChatSummaryDto(
+    int ChatId,
     long PeerUserId,
     string DisplayName,
     string LastMessageText,
     DateTime LastMessageTime,
     bool LastMessageIsOutgoing,
-    int MessageCount);
+    int MessageCount,
+    bool HasContact); 

@@ -36,6 +36,7 @@ builder.Services.AddSingleton<IAccountStorageService, AccountStorageService>();
 builder.Services.AddSingleton<IMessageStorageService, MessageStorageService>();
 
 builder.Services.AddSingleton<TelegramClientFactory>();
+builder.Services.AddSingleton<IChatStorageService, ChatStorageService>();
 builder.Services.AddSingleton<IContactProfileStorageService, ContactProfileStorageService>();
 builder.Services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
 builder.Services.AddSingleton<ITelegramAuthService, TelegramAuthService>();

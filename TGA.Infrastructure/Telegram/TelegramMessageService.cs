@@ -12,6 +12,7 @@ public class TelegramMessageService(
     IAccountStorageService accountStorage,
     IContactStorageService contactStorage,
     IConnectionStatusService connectionStatus, 
+    IChatStorageService chatStorage,  
     ILogger<TelegramMessageService> logger) : ITelegramMessageService
 {
     private long _myUserId;
@@ -19,45 +20,6 @@ public class TelegramMessageService(
 
     public event Action<MessageDto>? OnNewMessageReceived;
     public bool IsMonitoring { get; private set; }
-
-    public async Task LoadRecentPersonalMessagesAsync(int messagesPerDialog)
-    {
-        var active = await accountStorage.GetActiveAccountAsync()
-            ?? throw new InvalidOperationException("Нет активного аккаунта");
-        _myUserId = active.TelegramUserId;
-
-        connectionStatus.SetUpdating(); 
-        
-        var client = RequireClient();
-        var dialogs = await client.Messages_GetDialogs();
-
-        foreach (var dialog in dialogs.Dialogs)
-        {
-            if (dialog.Peer is not PeerUser peerUser) continue;
-
-            try
-            {
-                var inputPeer = new InputPeerUser(peerUser.user_id, 0);
-                var history = await client.Messages_GetHistory(inputPeer, limit: messagesPerDialog);
-                var chats = await client.Messages_GetAllChats();
-                foreach (var messageBase in history.Messages)
-                {
-                    if (messageBase is not Message message) continue;
-                    if (string.IsNullOrWhiteSpace(message.message)) continue;
-
-                    var dto = await ConvertToDto(client, message);
-                    if (dto is null) continue;
-
-                    await storage.AddMessageAsync(dto, active.Id);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Ошибка загрузки диалога {PeerId}", dialog.Peer.ID);
-            }
-        }
-        connectionStatus.SetConnected(active.DisplayName);
-    }
     
     public async Task<int> SyncDialogsAsync()
     {
@@ -68,21 +30,45 @@ public class TelegramMessageService(
         connectionStatus.SetUpdating();
 
         var client = RequireClient();
-        var dialogs = await client.Messages_GetDialogs();
+        var allDialogs = await client.Messages_GetAllDialogs();
+
+        var messagesById = allDialogs.Messages
+            .OfType<Message>()
+            .ToDictionary(m => (long)m.id);
 
         var count = 0;
 
-        foreach (var dialog in dialogs.Dialogs)
+        foreach (var dialog in allDialogs.dialogs)  
         {
+            
             if (dialog.Peer is not PeerUser peerUser) continue;
             if (peerUser.user_id == _myUserId) continue;
 
-            if (dialogs.UserOrChat(dialog.Peer) is not User user) continue;
+            var userOrChat = allDialogs.UserOrChat(dialog.Peer) as User;
+            if (userOrChat == null || userOrChat.IsBot) continue;
 
-            _userCache[peerUser.user_id] = user;
-            var name = DisplayName(user);
+            string? topText = null;
+            DateTime? topTime = null;
+            bool? topIsOutgoing = null;
+            
+            if (dialog.TopMessage != 0 && messagesById.TryGetValue(dialog.TopMessage, out var topMessage))
+            {
+                topText = string.IsNullOrWhiteSpace(topMessage.message)
+                    ? "[сообщение без текста]"
+                    : topMessage.message;
+                topTime = topMessage.Date.ToLocalTime();
+                topIsOutgoing = topMessage.flags.HasFlag(Message.Flags.out_);
+            }
+            
+            await chatStorage.UpsertDialogAsync(
+                active.Id, peerUser.user_id, dialog.TopMessage, topText, topTime, topIsOutgoing);
 
-            await contactStorage.UpsertAsync(active.Id, peerUser.user_id, name);
+            if (allDialogs.UserOrChat(dialog.Peer) is User user)
+            {
+                _userCache[peerUser.user_id] = user;
+                await contactStorage.UpsertAsync(active.Id, peerUser.user_id, DisplayName(user));
+            }
+
             count++;
         }
 
@@ -90,8 +76,41 @@ public class TelegramMessageService(
         logger.LogInformation("Синхронизировано {Count} диалогов", count);
         return count;
     }
+
+    /*public async Task<List<Contact>> SyncContactsAsync()
+    {
+        var active = await accountStorage.GetActiveAccountAsync()
+                     ?? throw new InvalidOperationException("Нет активного аккаунта");
+        _myUserId = active.TelegramUserId;
+        
+        var client = RequireClient();
+
+        List<Contact> contacts = new List<Contact>();
+        
+        try
+        {
+            var inputContacts = await client.Contacts_GetContacts();
+
+            foreach (var (id, user) in inputContacts.users)
+            {
+                Console.WriteLine($"ID: {id}, Имя: {user.first_name} {user.last_name}, " +
+                                  $"Телефон: {user.phone}, Username: @{user.username}");
+                contacts.Add(new Contact(
+                {
+                    
+                });
+
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Ошибка синхронизации контактов");
+        }
+
+        return contacts;
+    }*/
     
-    public async Task<List<MessageDto>> LoadChatHistoryAsync(long peerUserId, int limit)
+    public async Task<List<MessageDto>> LoadChatHistoryAsync(long peerUserId, int limit, long offsetMessageId = 0)
     {
         var active = await accountStorage.GetActiveAccountAsync()
                      ?? throw new InvalidOperationException("Нет активного аккаунта");
@@ -102,7 +121,8 @@ public class TelegramMessageService(
 
         try
         {
-            var history = await client.Messages_GetHistory(inputPeer, limit: limit);
+            var history = await client.Messages_GetHistory(
+                inputPeer, limit: limit, offset_id: (int)offsetMessageId);
 
             foreach (var messageBase in history.Messages)
             {
@@ -114,6 +134,9 @@ public class TelegramMessageService(
 
                 await storage.AddMessageAsync(dto, active.Id);
             }
+
+            var chatId = await chatStorage.GetOrCreateChatIdAsync(active.Id, peerUserId);
+            await chatStorage.MarkHistoryLoadedAsync(chatId);
         }
         catch (Exception ex)
         {
@@ -123,29 +146,6 @@ public class TelegramMessageService(
         return await storage.GetMessagesByPeerAsync(active.Id, peerUserId);
     }
     
-    public async Task<int> SyncContactsAsync()
-    {
-        logger.LogInformation("Начинаю синхронизацию контактов");
-        
-        var active = await accountStorage.GetActiveAccountAsync()
-                     ?? throw new InvalidOperationException("Нет активного аккаунта");
-
-        var client = RequireClient();
-        var dialogs = await client.Messages_GetDialogs();
-        var count = 0;
-
-        foreach (var dialog in dialogs.Dialogs)
-        {
-            if (dialog.Peer is not PeerUser peerUser) continue;
-            if (peerUser.user_id == active.TelegramUserId) continue; 
-
-            var name = await GetContactNameAsync(client, peerUser.user_id);
-            await contactStorage.UpsertAsync(active.Id, peerUser.user_id, name);
-            count++;
-        }
-
-        return count;
-    }
     public void StartMonitoring()
     {
         if (IsMonitoring) return;
@@ -258,7 +258,6 @@ public class TelegramMessageService(
                      ?? throw new InvalidOperationException("Нет активного аккаунта");
 
         var client = RequireClient();
-
         try
         {
             var users = await client.Users_GetUsers([new InputUser(peerUserId, 0)]);
@@ -271,7 +270,7 @@ public class TelegramMessageService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Не удалось разрешить имя для {PeerId}", peerUserId);
+            logger.LogWarning(ex, "Не удалось применить имя для {PeerId}", peerUserId);
             return null;
         }
     }

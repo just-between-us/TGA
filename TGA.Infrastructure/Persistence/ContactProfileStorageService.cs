@@ -51,7 +51,7 @@ public class ContactProfileStorageService(IDbContextFactory<AppDbContext> dbFact
 
         if (profile is null)
         {
-            profile = new ContactProfile { ContactId = contact.Id };
+            profile = new ContactProfile { ContactId = contact.Id, ChatId = contact.ChatId };
             db.ContactProfiles.Add(profile);
         }
 

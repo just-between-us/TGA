@@ -1,25 +1,29 @@
-﻿@page "/chats"
+@page "/chats"
 @using Microsoft.Extensions.Options
 @using TGA.Contract.Abstractions
 @using TGA.Contract.DTOs
 @using TGA.Contract.Options
+@using TGA.Domain.Enums
 @using TGA.UI.Utils
+@inject IConnectionStatusService ConnectionStatus
 @inject IMessageStorageService Storage
+@inject IChatStorageService ChatStorage
+@inject IContactStorageService ContactStorage
 @inject IAccountStorageService Accounts
 @inject ITelegramMessageService TelegramSvc
 @inject NavigationManager NavigationManager
 @inject IOptions<HistoryLoadOptions> HistoryOptions
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
-@implements IDisposable
+@implements IAsyncDisposable
 
 <PageTitle>Чаты</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-4" Style="height: calc(100vh - 100px);">
     <MudGrid Style="height: 100%;">
 
-        @* Левая панель — список контактов *@
-        <MudItem  xs="12" md="4" Style="height: 100%;">
+        @* Левая панель — список чатов *@
+        <MudItem xs="12" md="4" Style="height: 100%;">
             <MudPaper Class="d-flex flex-column" Style="height: 100%;" Elevation="2">
                 <div class="pa-3">
                     <MudTextField T="string" Placeholder="Поиск чата" Adornment="Adornment.Start"
@@ -27,6 +31,10 @@
                                   Value="_search" ValueChanged="OnSearchChanged"
                                   Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </div>
+                @if (!_isConnected)
+                {
+                    <MudAlert Severity="Severity.Warning">Вы не подключены к аккаунту или сети!</MudAlert>
+                }
 
                 @if (_loadingContacts)
                 {
@@ -35,7 +43,7 @@
                 else if (FilteredChats.Count == 0)
                 {
                     <MudText Typo="Typo.body2" Class="pa-4" Color="Color.Surface">
-                        @(_chats.Count == 0 ? "Пока нет сообщений. Загрузите историю на странице входа." : "Ничего не найдено")
+                        @(_chats.Count == 0 ? "Пока нет чатов. Синхронизируйте диалоги на странице входа." : "Ничего не найдено")
                     </MudText>
                 }
                 else
@@ -50,7 +58,7 @@
                                     <MudAvatar Color="Color.Primary" Class="mr-3">
                                         @GetInitials(chat.DisplayName)
                                     </MudAvatar>
-                                    
+
                                     <div style="flex: 1; min-width: 0;">
                                         <div class="d-flex justify-space-between">
                                             <MudText Typo="Typo.subtitle2" Class="text-truncate">@chat.DisplayName</MudText>
@@ -62,6 +70,17 @@
                                             @(chat.LastMessageIsOutgoing ? "Вы: " : "")@StringHelper.Truncate(chat.LastMessageText, 50)
                                         </MudText>
                                     </div>
+
+                                    @if (!chat.HasContact)
+                                    {
+                                        <MudTooltip Text="Добавить как контакт">
+                                            <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
+                                                           Size="Size.Small"
+                                                           Color="Color.Secondary"
+                                                           OnClick="@(() => AddAsContactAsync(chat))"
+                                                           OnClick:stopPropagation="true" />
+                                        </MudTooltip>
+                                    }
                                 </div>
                             </MudListItem>
                         }
@@ -86,15 +105,30 @@
                 else
                 {
                     <div class="pa-3 d-flex align-center" style="border-bottom: 1px solid var(--mud-palette-lines-default);">
-                        <MudText Typo="Typo.h6">@_selectedName</MudText> 
+                        <MudText Typo="Typo.h6">@_selectedName</MudText>
                     </div>
-                    <MudTooltip Color="Color.Info" Arrow="true" Placement="Placement.Left" Text="@(TelegramSvc.IsMonitoring ? "Сервис готов принять новые сообщения" : "Приём новых сообщений остановлен (из-за аккаунта или ошибки)")">
+                    <MudTooltip Color="Color.Info" Arrow="true" Placement="Placement.Left"
+                                Text="@(TelegramSvc.IsMonitoring ? "Сервис готов принять новые сообщения" : "Приём новых сообщений остановлен (из-за аккаунта или ошибки)")">
                         <MudText Typo="Typo.caption" Class="ma-4" Color="Color.Surface">
                             @(TelegramSvc.IsMonitoring ? "Жду сообщения..." : "Сообщения не получаются.")
                         </MudText>
                     </MudTooltip>
 
                     <div id="message-list" class="pa-3" style="flex: 1; overflow-y: auto;">
+                        @if (_loadingMore)
+                        {
+                            <div class="d-flex justify-center mb-2">
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                            </div>
+                        }
+                        @if (_hasMoreHistory && !_loadingMessages && _messages.Count > 0)
+                        {
+                            <div class="d-flex justify-center mb-2">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@_loadingMore" OnClick="LoadMoreHistoryAsync">
+                                    @(_loadingMore ? "Загрузка..." : "Загрузить ещё")
+                                </MudButton>
+                            </div>
+                        }
                         @if (_loadingMessages)
                         {
                             <MudProgressLinear Indeterminate="true" />
@@ -148,9 +182,13 @@
     private int _accountId;
     private bool _loadingContacts = true;
     private bool _loadingMessages;
+    private bool _loadingMore;
+    private bool _hasMoreHistory = true;
     private bool _sending;
+    private bool _isConnected;
     private string _draft = string.Empty;
     private int _historyLimit;
+    private DotNetObjectReference<Chats>? _dotNetRef;
 
     private List<ChatSummaryDto> FilteredChats =>
         string.IsNullOrWhiteSpace(_search)
@@ -160,6 +198,8 @@
     protected override async Task OnInitializedAsync()
     {
         _historyLimit = HistoryOptions.Value.DefaultMessagesPerDialog;
+        
+        _isConnected = ConnectionStatus.State == ConnectionState.Connected;
         
         var active = await Accounts.GetActiveAccountAsync();
         if (active is null)
@@ -175,9 +215,17 @@
         TelegramSvc.OnNewMessageReceived += OnNewMessage;
     }
 
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+        }
+    }
+
     private async Task RefreshChatsAsync()
     {
-        _chats = await Storage.GetChatSummariesAsync(_accountId);
+        _chats = await ChatStorage.GetChatSummariesAsync(_accountId);
     }
 
     private void OnSearchChanged(string value) => _search = value;
@@ -186,6 +234,7 @@
     {
         _selectedPeerId = peerUserId;
         _selectedName = _chats.FirstOrDefault(c => c.PeerUserId == peerUserId)?.DisplayName ?? "Неизвестно";
+        _hasMoreHistory = true;
 
         _loadingMessages = true;
         StateHasChanged();
@@ -199,6 +248,62 @@
         _loadingMessages = false;
         StateHasChanged();
         await ScrollToBottomAsync();
+        await AttachScrollListenerAsync();
+    }
+
+    private async Task LoadMoreHistoryAsync()
+    {
+        if (_selectedPeerId is null || _loadingMore || !_hasMoreHistory) return;
+
+        var oldestId = _messages.Count > 0 ? _messages.Min(m => m.Id) : 0;
+        if (oldestId == 0)
+        {
+            _hasMoreHistory = false;
+            return;
+        }
+
+        _loadingMore = true;
+        StateHasChanged();
+
+        var beforeCount = _messages.Count;
+
+        double scrollAnchor;
+        try
+        {
+            scrollAnchor = await JS.InvokeAsync<double>("chatScroll.getScrollHeight", "message-list");
+        }
+        catch
+        {
+            scrollAnchor = 0;
+        }
+
+        var updated = await TelegramSvc.LoadChatHistoryAsync(_selectedPeerId.Value, _historyLimit, oldestId);
+
+        if (updated.Count <= beforeCount)
+            _hasMoreHistory = false; // сервер не отдал ничего нового — история закончилась
+
+        _messages = updated;
+        _loadingMore = false;
+        StateHasChanged();
+
+        try
+        {
+            await JS.InvokeVoidAsync("chatScroll.restoreScroll", "message-list", scrollAnchor);
+        }
+        catch { /* interop может быть недоступен в момент prerender — не критично */ }
+    }
+
+    [JSInvokable]
+    public async Task OnScrolledToTop()
+    {
+        await LoadMoreHistoryAsync();
+    }
+
+    private async Task AddAsContactAsync(ChatSummaryDto chat)
+    {
+        await ContactStorage.UpsertAsync(_accountId, chat.PeerUserId, chat.DisplayName);
+        await RefreshChatsAsync();
+        Snackbar.Add($"«{chat.DisplayName}» добавлен как контакт", Severity.Success);
     }
 
     private async Task SendMessageAsync()
@@ -255,10 +360,20 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("eval",
-                "document.getElementById('message-list')?.scrollTo(0, document.getElementById('message-list').scrollHeight)");
+            await JS.InvokeVoidAsync("chatScroll.scrollToBottom", "message-list");
         }
         catch { /* JS interop может быть недоступен в момент prerender — не критично */ }
+    }
+
+    private async Task AttachScrollListenerAsync()
+    {
+        if (_dotNetRef is null) return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("chatScroll.attach", "message-list", _dotNetRef);
+        }
+        catch { /* interop может быть недоступен в момент prerender — не критично */ }
     }
 
     private static string GetInitials(string name)
@@ -284,5 +399,10 @@
         ? "background-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text); border-radius: 12px 12px 2px 12px; max-width: 70%;"
         : "background-color: var(--mud-palette-background-grey); border-radius: 12px 12px 12px 2px; max-width: 70%;";
 
-    public void Dispose() => TelegramSvc.OnNewMessageReceived -= OnNewMessage;
+    public async ValueTask DisposeAsync()
+    {
+        TelegramSvc.OnNewMessageReceived -= OnNewMessage;
+        _dotNetRef?.Dispose();
+        await ValueTask.CompletedTask;
+    }
 }

@@ -12,12 +12,4 @@ public class ChatQueryService(IMessageStorageService storage, IAccountStorageSer
 
         return await storage.GetMessagesAsync(active.Id, contact);
     }
-
-    public async Task<List<string>> GetContactsForActiveAccountAsync()
-    {
-        var active = await accounts.GetActiveAccountAsync()
-                     ?? throw new InvalidOperationException("Нет активного аккаунта");
-
-        return await storage.GetContactsAsync(active.Id);
-    }
 }

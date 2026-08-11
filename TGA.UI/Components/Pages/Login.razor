@@ -47,52 +47,15 @@
                     @if (Auth.CurrentStep == AuthStep.WaitingCode)
                     {
                         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="m-4 text-center">
-                            Код отправлен в Telegram. Если не пришёл, запросите повторно.
+                            Код отправлен в Telegram. Если не пришёл, проверьте номер телефона или начните заново.
                         </MudText>
                     }
                 }
-                @*else if (Auth.CurrentStep == AuthStep.Done)
-                {
-                    <MudAlert Severity="Severity.Success" Class="mb-6" NoIcon="true">
-                        Аккаунт успешно подключён!
-                    </MudAlert>
-                    @if (_message != String.Empty)
-                    {
-                        <MudAlert Severity="Severity.Success" Class="mb-6" NoIcon="true">
-                            @_message
-                        </MudAlert>
-                    }
-                    <MudText Typo="Typo.subtitle2" Class="mb-4">
-                        Сколько последних сообщений загружать на диалог?
-                    </MudText>
-
-                    <div class="d-flex align-center">
-                        <MudIcon Icon="Icons.Material.Filled.List" Size="Size.Small" Color="Color.Secondary" />
-                        <MudSlider @bind-Value="_messagesPerDialog"
-                                   Min="1" Max="@HistoryOptions.Value.MaxMessagesPerDialog"
-                                   Step="1" Class="mx-3 flex-grow-1" />
-                        <MudIcon Icon="Icons.Material.Filled.ListAlt" Size="Size.Small" Color="Color.Secondary" />
-                    </div>
-                    <MudText Typo="Typo.body2" Align="Align.Center" Color="Color.Secondary" Class="mb-6">
-                        @_messagesPerDialog @(_messagesPerDialog == 1 ? "сообщение" : "сообщений")
-                    </MudText>
-
-                    @if (_loading)
-                    {
-                        <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mb-6" />
-                    }
-
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Download"
-                               FullWidth="true" OnClick="LoadHistory" Disabled="@_loading" Size="Size.Large">
-                        @(_loading ? "Загрузка..." : "Загрузить историю")
-                    </MudButton>
-                }*@
                 else if (Auth.CurrentStep == AuthStep.Done)
                 {
                     <MudAlert Severity="Severity.Success" Class="mb-3">Успешно подключено!</MudAlert>
-                    <MudButton Color="Color.Primary" OnClick="SyncAndContinue" Disabled="@_syncing">
-                        @(_syncing ? "Синхронизация контактов..." : "Продолжить")
+                    <MudButton Color="Color.Primary" FullWidth="true" OnClick="SyncAndContinue" Disabled="@_syncing">
+                        @(_syncing ? "Синхронизация диалогов..." : "Загрузить диалоги")
                     </MudButton>
                 }
                 else if (Auth.CurrentStep == AuthStep.Error)
@@ -100,6 +63,9 @@
                     <MudAlert Severity="Severity.Error" Class="mb-6">
                         @Auth.ErrorMessage
                     </MudAlert>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="m-4 text-center">
+                        Подождите пару секунд и войдите повторно
+                    </MudText>
                     <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
                                StartIcon="@Icons.Material.Filled.Refresh"
                                FullWidth="true" OnClick="Start" Size="Size.Large">
@@ -112,14 +78,12 @@
 
 @code {
     private string _input = string.Empty;
-    private int _messagesPerDialog;
     private string? _message = String.Empty;
     private bool _loading;
     private bool _syncing;
 
     protected override void OnInitialized()
     {
-        _messagesPerDialog = HistoryOptions.Value.DefaultMessagesPerDialog;
         Auth.StateChanged += OnChanged;
     }
 
@@ -164,17 +128,6 @@
     {
         Auth.SubmitInput(_input);
         _input = string.Empty;
-    }
-
-    private async Task LoadHistory()
-    {
-        _loading = true;
-        StateHasChanged();
-        await MessageService.LoadRecentPersonalMessagesAsync(_messagesPerDialog);
-        MessageService.StartMonitoring();
-        _loading = false;
-        _message = "Сообщения загружены";
-        StateHasChanged();
     }
     private async Task SyncAndContinue()
     {

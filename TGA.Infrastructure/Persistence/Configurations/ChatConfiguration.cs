@@ -9,7 +9,9 @@ public class ChatConfiguration : IEntityTypeConfiguration<Chat>
     public void Configure(EntityTypeBuilder<Chat> builder)
     {
         builder.HasIndex(c => new { c.TelegramAccountId, c.PeerId }).IsUnique();
-
+        
+        builder.Property(c => c.TopMessageText).HasMaxLength(1000);
+        
         builder.HasOne(c => c.Contact)
             .WithOne(ct => ct.Chat)
             .HasForeignKey<Contact>(ct => ct.ChatId)

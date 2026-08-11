@@ -15,16 +15,26 @@ public class MessageStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
-        var exists = await db.Messages.AnyAsync(m =>
-            m.TelegramAccountId == accountId &&
-            m.TelegramMessageId == message.Id &&
-            m.PeerUserId == message.PeerUserId);
+        var chatId = await db.Chats
+            .Where(c => c.TelegramAccountId == accountId && c.PeerId == message.PeerUserId)
+            .Select(c => c.Id)
+            .FirstOrDefaultAsync();
 
+        if (chatId == 0)
+        {
+            var chat = new Chat { TelegramAccountId = accountId, PeerId = message.PeerUserId, PeerType = "User" };
+            db.Chats.Add(chat);
+            await db.SaveChangesAsync();
+            chatId = chat.Id;
+        }
+
+        var exists = await db.Messages.AnyAsync(m => m.ChatId == chatId && m.TelegramMessageId == message.Id);
         if (exists) return false;
 
         db.Messages.Add(new MessageRecord
         {
             TelegramAccountId = accountId,
+            ChatId = chatId,
             TelegramMessageId = message.Id,
             ContactName = message.ContactName,
             Text = message.Text,
@@ -50,17 +60,7 @@ public class MessageStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
         return records.Select(m => new MessageDto(
             m.TelegramMessageId, m.ContactName, m.Text, m.Time, m.IsOutgoing, m.PeerUserId)).ToList();
     }
-
-    public async Task<List<string>> GetContactsAsync(int accountId)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync();
-        return await db.Messages
-            .Where(m => m.TelegramAccountId == accountId)
-            .Select(m => m.ContactName)
-            .Distinct()
-            .OrderBy(c => c)
-            .ToListAsync();
-    }
+    
 
     public async Task ClearAsync(int accountId)
     {
@@ -88,41 +88,6 @@ public class MessageStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
         return sb.ToString();
     }
     
-    
-    public async Task<List<ChatSummaryDto>> GetChatSummariesAsync(int accountId)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync();
-
-        var contacts = await db.Contacts
-            .Where(c => c.TelegramAccountId == accountId)
-            .ToListAsync();
-
-        var lastMessages = await db.Messages
-            .Where(m => m.TelegramAccountId == accountId)
-            .GroupBy(m => m.PeerUserId)
-            .Select(g => new
-            {
-                PeerUserId = g.Key,
-                Count = g.Count(),
-                Last = g.OrderByDescending(m => m.Time).First()
-            })
-            .ToDictionaryAsync(x => x.PeerUserId);
-
-        return contacts
-            .Select(c =>
-            {
-                lastMessages.TryGetValue(c.PeerUserId, out var info);
-                return new ChatSummaryDto(
-                    c.PeerUserId,
-                    c.DisplayName,
-                    info?.Last.Text ?? "Нажмите, чтобы загрузить историю",
-                    info?.Last.Time ?? DateTime.MinValue,
-                    info?.Last.IsOutgoing ?? false,
-                    info?.Count ?? 0);
-            })
-            .OrderByDescending(c => c.LastMessageTime)
-            .ToList();
-    }
 
     public async Task<List<MessageDto>> GetMessagesByPeerAsync(int accountId, long peerUserId)
     {

@@ -13,6 +13,16 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
+        var chat = await db.Chats.FirstOrDefaultAsync(c =>
+            c.TelegramAccountId == accountId && c.PeerId == peerUserId);
+
+        if (chat is null)
+        {
+            chat = new Chat { TelegramAccountId = accountId, PeerId = peerUserId, PeerType = "User" };
+            db.Chats.Add(chat);
+            await db.SaveChangesAsync(); // нужен Id чата для привязки
+        }
+
         var existing = await db.Contacts.FirstOrDefaultAsync(c =>
             c.TelegramAccountId == accountId && c.PeerUserId == peerUserId);
 
@@ -23,13 +33,18 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
                 TelegramAccountId = accountId,
                 PeerUserId = peerUserId,
                 DisplayName = displayName,
+                ChatId = chat.Id,
                 UpdatedAt = DateTime.UtcNow
             });
         }
-        else if (IsGenericName(existing.DisplayName) && !IsGenericName(displayName))
+        else
         {
-            existing.DisplayName = displayName;
-            existing.UpdatedAt = DateTime.UtcNow;
+            existing.ChatId ??= chat.Id;
+            if (IsGenericName(existing.DisplayName) && !IsGenericName(displayName))
+            {
+                existing.DisplayName = displayName;
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         await db.SaveChangesAsync();
@@ -50,6 +65,16 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
 
         await using var db = await dbFactory.CreateDbContextAsync();
 
+        var chat = await db.Chats.FirstOrDefaultAsync(c =>
+            c.TelegramAccountId == accountId && c.PeerId == peerUserId);
+
+        if (chat is null)
+        {
+            chat = new Chat { TelegramAccountId = accountId, PeerId = peerUserId, PeerType = "User" };
+            db.Chats.Add(chat);
+            await db.SaveChangesAsync(); 
+        }
+
         var contact = await db.Contacts.FirstOrDefaultAsync(c =>
             c.TelegramAccountId == accountId && c.PeerUserId == peerUserId);
 
@@ -57,16 +82,19 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
         {
             db.Contacts.Add(new Contact
             {
-                TelegramAccountId = accountId,
                 PeerUserId = peerUserId,
                 DisplayName = newName,
-                UpdatedAt = DateTime.UtcNow
+                TelegramAccountId = accountId,
+                UpdatedAt = DateTime.UtcNow,
+                ChatId = chat.Id,
+                Chat = chat   
             });
         }
         else
         {
             contact.DisplayName = newName;
             contact.UpdatedAt = DateTime.UtcNow;
+            contact.ChatId ??= chat.Id;
         }
 
         await db.SaveChangesAsync();

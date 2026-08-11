@@ -1,6 +1,6 @@
 ﻿namespace TGA.Domain.Entities;
 
-public class MessageRecord
+public class MessageRecord : Entity
 {
     public int TelegramMessageId { get; set; }
     public string ContactName { get; set; } = string.Empty;
