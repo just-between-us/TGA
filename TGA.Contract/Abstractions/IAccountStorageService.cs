@@ -11,4 +11,5 @@ public interface IAccountStorageService
     Task DeleteAsync(int accountId);
     Task<byte[]?> GetSessionDataAsync(int accountId);
     Task<AccountDto?> GetByIdAsync(int accountId);
+    Task UpdateSessionDataAsync(int accountId, byte[] sessionData);
 }

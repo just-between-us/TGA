@@ -11,11 +11,12 @@ public interface ITelegramAuthService
     event Action? StateChanged;
 
     Task StartLoginAsync();
+    Task StartAddAccountAsync();
     void SubmitInput(string value);
 
     Task LogoutAsync();
 
     Task SwitchAccountAsync(int accountId);
 
-    Task StartAddAccountAsync();
+    Task<bool> RestoreSessionAsync(int accountId);
 }

@@ -93,7 +93,7 @@
         AuthStep.WaitingPhone => Icons.Material.Filled.Phone,
         AuthStep.WaitingCode => Icons.Material.Filled.Sms,
         AuthStep.WaitingPassword => Icons.Material.Filled.Key,
-        AuthStep.Done => Icons.Material.Filled.CheckCircle,
+        AuthStep.Done => Icons.Material.Filled.Message,
         AuthStep.Error => Icons.Material.Filled.Error,
         _ => Icons.Material.Filled.Help
     };
@@ -122,7 +122,7 @@
 
     private Adornment GetAdornment() => Adornment.Start;
 
-    private void Start() => _ = Auth.StartLoginAsync();
+    private void Start() => _ = Auth.StartAddAccountAsync();
 
     private void Submit()
     {

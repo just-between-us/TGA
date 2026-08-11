@@ -7,15 +7,30 @@ namespace TGA.Infrastructure.Telegram;
 public class TelegramClientFactory(IOptions<TelegramOptions> options)
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private Client? _current;
 
-    public Client CreateNew(Func<string, string?> configCallback)
+    private Client? _current;
+    private MemoryStream? _sessionStream;
+
+    public Client CreateNew(
+        Func<string, string?> configCallback,
+        byte[]? existingSessionData = null)
     {
         _lock.Wait();
+
         try
         {
+            if (_current is not null && _sessionStream is not null && existingSessionData is null)
+            {
+                return _current;
+            }
+
             _current?.Dispose();
-            _current = new Client(configCallback);
+            _sessionStream?.Dispose();
+
+            _sessionStream = CreateExpandableStream(existingSessionData);
+
+            _current = new Client(configCallback, _sessionStream);
+
             return _current;
         }
         finally
@@ -24,27 +39,37 @@ public class TelegramClientFactory(IOptions<TelegramOptions> options)
         }
     }
 
-    public Client GetCurrent()
+    private static MemoryStream CreateExpandableStream(byte[]? data)
     {
-        _lock.Wait();
-        try
+        var stream = new MemoryStream();
+
+        if (data is { Length: > 0 })
         {
-            return _current ?? throw new InvalidOperationException(
-                "Telegram-клиент ещё не инициализирован — нужно сначала выполнить вход.");
+            stream.Write(data, 0, data.Length);
+            stream.Position = 0;
         }
-        finally
-        {
-            _lock.Release();
-        }
+
+        return stream;
     }
+
+    public Client GetCurrent() =>
+        _current ?? throw new InvalidOperationException(
+            "Telegram-клиент ещё не инициализирован.");
+
+    public byte[] GetCurrentSessionBytes() =>
+        _sessionStream?.ToArray() ?? [];
 
     public void Reset()
     {
         _lock.Wait();
+
         try
         {
             _current?.Dispose();
             _current = null;
+
+            _sessionStream?.Dispose();
+            _sessionStream = null;
         }
         finally
         {

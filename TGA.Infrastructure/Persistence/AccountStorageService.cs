@@ -25,6 +25,15 @@ public class AccountStorageService(
         return active is null ? null
             : new AccountDto(active.Id, active.TelegramUserId, active.DisplayName, active.PhoneNumber, active.IsActive, active.LastLoginAt);
     }
+    
+    public async Task UpdateSessionDataAsync(int accountId, byte[] sessionData)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var encrypted = encryptor.Encrypt(sessionData);
+
+        await db.Accounts.Where(a => a.Id == accountId)
+            .ExecuteUpdateAsync(s => s.SetProperty(a => a.SessionData, encrypted));
+    }
 
     public async Task<int> SaveAccountAsync(long telegramUserId, string displayName, string? phone, byte[] sessionData)
     {

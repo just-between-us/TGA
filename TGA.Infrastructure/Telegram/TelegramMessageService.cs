@@ -76,39 +76,6 @@ public class TelegramMessageService(
         logger.LogInformation("Синхронизировано {Count} диалогов", count);
         return count;
     }
-
-    /*public async Task<List<Contact>> SyncContactsAsync()
-    {
-        var active = await accountStorage.GetActiveAccountAsync()
-                     ?? throw new InvalidOperationException("Нет активного аккаунта");
-        _myUserId = active.TelegramUserId;
-        
-        var client = RequireClient();
-
-        List<Contact> contacts = new List<Contact>();
-        
-        try
-        {
-            var inputContacts = await client.Contacts_GetContacts();
-
-            foreach (var (id, user) in inputContacts.users)
-            {
-                Console.WriteLine($"ID: {id}, Имя: {user.first_name} {user.last_name}, " +
-                                  $"Телефон: {user.phone}, Username: @{user.username}");
-                contacts.Add(new Contact(
-                {
-                    
-                });
-
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Ошибка синхронизации контактов");
-        }
-
-        return contacts;
-    }*/
     
     public async Task<List<MessageDto>> LoadChatHistoryAsync(long peerUserId, int limit, long offsetMessageId = 0)
     {

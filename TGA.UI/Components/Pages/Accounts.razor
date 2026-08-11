@@ -75,6 +75,7 @@
     private async Task AddAccount()
     {
         Nav.NavigateTo("/login");
+        await Auth.StartAddAccountAsync();
     }
 
     private async Task Logout()

@@ -11,7 +11,7 @@
 <MudLayout>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())"/>
-        <MudText Typo="Typo.h5" Class="ml-3"><b>IGOR</b></MudText>
+        <MudText Typo="Typo.h5" Class="ml-3"><b>TGA</b></MudText>
         <MudChip Icon="@StatusIcon" Class="mx-8" Variant="Variant.Text" Color="StatusColor" T="string">
                 @StatusLabel
         </MudChip>
@@ -51,7 +51,16 @@
         };
         ConnectionStatus.StateChanged += OnConnectionStateChanged;
     }
-    private void OnConnectionStateChanged() => InvokeAsync(StateHasChanged);
+    
+    private void OnConnectionStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        ConnectionStatus.StateChanged -= OnConnectionStateChanged;
+    }
 
     private string StatusLabel => ConnectionStatus.State switch
     {
@@ -138,6 +147,5 @@
         false => Icons.Material.Outlined.DarkMode,
     };
 
-    public void Dispose() => ConnectionStatus.StateChanged -= OnConnectionStateChanged;
 
 }
