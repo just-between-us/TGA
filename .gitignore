@@ -1,0 +1,45 @@
+# Build artifacts
+[Bb]in/
+[Oo]bj/
+[Tt]estResults/
+[Dd]ebug/
+[Rr]elease/
+
+# .NET / Visual Studio
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.cache
+*.pdb
+*.log
+*.tmp
+*.tmp_proj
+*.vs/
+.vs/
+.vscode/
+
+# JetBrains Rider / IntelliJ
+.idea/
+*.iml
+
+# Local app data and databases
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.session
+*.bak
+*.orig
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ASP.NET / local secrets
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+
+# Publish output
+publish/
