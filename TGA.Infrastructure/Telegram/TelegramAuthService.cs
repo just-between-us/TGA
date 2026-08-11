@@ -41,33 +41,15 @@ public class TelegramAuthService(
 
                 var client = clientFactory.CreateNew(ConfigCallback);
                 var user = await Task.Run(() => client.LoginUserIfNeeded());
-                
-                var sessionData = clientFactory.GetCurrentSessionBytes();
 
-                if (isAddAccount)
-                {
-                    await accountStorage.SaveAccountAsync(
-                        user.ID,
-                        $"{user.first_name} {user.last_name}".Trim(),
-                        user.phone,
-                        sessionData);
-                }
-                else
-                {
-                    await accountStorage.SaveAccountAsync(
-                        user.ID,
-                        $"{user.first_name} {user.last_name}".Trim(),
-                        user.phone,
-                        sessionData);
-                }
+                var sessionData = clientFactory.GetCurrentSessionBytes();
+                await SaveAuthenticatedAccountAsync(user, sessionData);
 
                 IsLoggedIn = true;
                 CurrentStep = AuthStep.Done;
                 Notify();
 
-                var displayName = !string.IsNullOrEmpty(user.username)
-                    ? $"@{user.username}"
-                    : $"{user.first_name} {user.last_name}".Trim();
+                var displayName = GetDisplayName(user);
 
                 connectionStatus.SetConnected(displayName);
                 messageService.StartMonitoring();
@@ -117,9 +99,7 @@ public class TelegramAuthService(
                 if (completed == loginTask)
                 {
                     var user = await loginTask;
-                    displayName = !string.IsNullOrEmpty(user.username)
-                        ? $"@{user.username}"
-                        : $"{user.first_name} {user.last_name}".Trim();
+                    displayName = GetDisplayName(user);
                 }
                 else
                 {
@@ -210,6 +190,18 @@ public class TelegramAuthService(
         }
     }
 
+
+    private async Task SaveAuthenticatedAccountAsync(User user, byte[] sessionData)
+        => await accountStorage.SaveAccountAsync(
+            user.ID,
+            GetDisplayName(user),
+            user.phone,
+            sessionData);
+
+    private static string GetDisplayName(User user) =>
+        !string.IsNullOrEmpty(user.username)
+            ? $"@{user.username}"
+            : $"{user.first_name} {user.last_name}".Trim();
 
     private string? ConfigCallback(string what) => what switch
     {
