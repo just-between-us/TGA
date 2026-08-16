@@ -4,15 +4,36 @@ using TL;
 
 namespace TGA.Infrastructure.Telegram;
 
-public class TelegramAuthService(
-    TelegramClientFactory clientFactory,
-    IAccountStorageService accountStorage,
-    ITelegramMessageService messageService,
-    IConnectionStatusService connectionStatus,
-    ILogger<TelegramAuthService> logger) : ITelegramAuthService
+public class TelegramAuthService : ITelegramAuthService
 {
+    private readonly TelegramClientFactory _clientFactory;
+    private readonly IAccountStorageService _accountStorage;
+    private readonly ITelegramMessageService _messageService;
+    private readonly IConnectionStatusService _connectionStatus;
+    private readonly TelegramLoginPrompt _loginPrompt;
+    private readonly TelegramSessionRestorer _sessionRestorer;
+    private readonly ILogger<TelegramAuthService> _logger;
     private readonly SemaphoreSlim _authLock = new(1, 1);
-    private TaskCompletionSource<string?>? _pendingInput;
+
+    public TelegramAuthService(
+        TelegramClientFactory clientFactory,
+        IAccountStorageService accountStorage,
+        ITelegramMessageService messageService,
+        IConnectionStatusService connectionStatus,
+        TelegramLoginPrompt loginPrompt,
+        TelegramSessionRestorer sessionRestorer,
+        ILogger<TelegramAuthService> logger)
+    {
+        _clientFactory = clientFactory;
+        _accountStorage = accountStorage;
+        _messageService = messageService;
+        _connectionStatus = connectionStatus;
+        _loginPrompt = loginPrompt;
+        _sessionRestorer = sessionRestorer;
+        _logger = logger;
+
+        _loginPrompt.StepRequested += OnLoginStepRequested;
+    }
 
     public AuthStep CurrentStep { get; private set; } = AuthStep.NotStarted;
     public string? ErrorMessage { get; private set; }
@@ -20,15 +41,15 @@ public class TelegramAuthService(
 
     public event Action? StateChanged;
 
-    public Task StartLoginAsync() => StartAuthFlowAsync(isAddAccount: false);
+    public Task StartLoginAsync() => StartAuthFlowAsync();
 
-    public Task StartAddAccountAsync() => StartAuthFlowAsync(isAddAccount: true);
+    public Task StartAddAccountAsync() => StartAuthFlowAsync();
 
-    private async Task StartAuthFlowAsync(bool isAddAccount)
+    private async Task StartAuthFlowAsync()
     {
         ErrorMessage = null;
         CurrentStep = AuthStep.NotStarted;
-        connectionStatus.SetConnecting();
+        _connectionStatus.SetConnecting();
         Notify();
 
         await _authLock.WaitAsync();
@@ -36,30 +57,28 @@ public class TelegramAuthService(
         {
             try
             {
-                messageService.StopMonitoring();
-                clientFactory.Reset();
+                _messageService.StopMonitoring();
+                _clientFactory.Reset();
 
-                var client = clientFactory.CreateNew(ConfigCallback);
+                var client = _clientFactory.CreateNew(_loginPrompt.ConfigCallback);
                 var user = await Task.Run(() => client.LoginUserIfNeeded());
 
-                var sessionData = clientFactory.GetCurrentSessionBytes();
-                await SaveAuthenticatedAccountAsync(user, sessionData);
+                var sessionData = _clientFactory.GetCurrentSessionBytes();
+                await _accountStorage.SaveAccountAsync(user.ID, GetDisplayName(user), user.phone, sessionData);
 
                 IsLoggedIn = true;
                 CurrentStep = AuthStep.Done;
                 Notify();
 
-                var displayName = GetDisplayName(user);
-
-                connectionStatus.SetConnected(displayName);
-                messageService.StartMonitoring();
+                _connectionStatus.SetConnected(GetDisplayName(user));
+                _messageService.StartMonitoring();
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Ошибка входа в Telegram");
+                _logger.LogError(ex, "Ошибка входа в Telegram");
                 ErrorMessage = ex.Message;
                 CurrentStep = AuthStep.Error;
-                connectionStatus.SetDisconnected();
+                _connectionStatus.SetDisconnected();
                 Notify();
             }
         }
@@ -74,69 +93,39 @@ public class TelegramAuthService(
         await _authLock.WaitAsync();
         try
         {
-            connectionStatus.SetConnecting();
+            _connectionStatus.SetConnecting();
 
-            var sessionData = await accountStorage.GetSessionDataAsync(accountId);
+            var sessionData = await _accountStorage.GetSessionDataAsync(accountId);
             if (sessionData is null || sessionData.Length == 0)
             {
-                logger.LogInformation("Сохранённой сессии для аккаунта {Id} нет, нужен обычный вход", accountId);
-                connectionStatus.SetDisconnected();
+                _logger.LogInformation("Сохранённой сессии для аккаунта {Id} нет, нужен обычный вход", accountId);
+                _connectionStatus.SetDisconnected();
                 return false;
             }
 
             try
             {
-                logger.LogInformation("Пытаюсь восстановить сессию для аккаунта {Id}", accountId);
-                messageService.StopMonitoring();
-                clientFactory.Reset();
+                _logger.LogInformation("Пытаюсь восстановить сессию для аккаунта {Id}", accountId);
+                _messageService.StopMonitoring();
+                _clientFactory.Reset();
 
-                var client = clientFactory.CreateNew(ConfigCallback, sessionData);
-
-                var loginTask = Task.Run(() => client.LoginUserIfNeeded());
-                var completed = await Task.WhenAny(loginTask, Task.Delay(TimeSpan.FromSeconds(10)));
-
-                string? displayName = null;
-                if (completed == loginTask)
-                {
-                    var user = await loginTask;
-                    displayName = GetDisplayName(user);
-                }
-                else
-                {
-                    logger.LogInformation(
-                        "Логин для аккаунта {Id} ещё не завершён, продолжаю использовать сохранённую сессию",
-                        accountId);
-
-                    var account = await accountStorage.GetByIdAsync(accountId);
-                    displayName = account?.DisplayName;
-                }
-
-                await accountStorage.SetActiveAsync(accountId);
-                await accountStorage.UpdateSessionDataAsync(accountId, clientFactory.GetCurrentSessionBytes());
+                var result = await _sessionRestorer.TryRestoreAsync(accountId, sessionData, _loginPrompt.ConfigCallback);
 
                 IsLoggedIn = true;
                 CurrentStep = AuthStep.Done;
-
-                if (!string.IsNullOrWhiteSpace(displayName))
-                {
-                    connectionStatus.SetConnected(displayName);
-                }
-                else
-                {
-                    connectionStatus.SetConnected("Telegram");
-                }
-
+                _connectionStatus.SetConnected(
+                    string.IsNullOrWhiteSpace(result.DisplayName) ? "Telegram" : result.DisplayName);
                 Notify();
 
-                messageService.StartMonitoring();
-                logger.LogInformation("Сессия для аккаунта {Id} восстановлена или подготовлена", accountId);
+                _messageService.StartMonitoring();
+                _logger.LogInformation("Сессия для аккаунта {Id} восстановлена или подготовлена", accountId);
                 return true;
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Не удалось восстановить сессию для аккаунта {Id}", accountId);
-                clientFactory.Reset();
-                connectionStatus.SetDisconnected();
+                _logger.LogWarning(ex, "Не удалось восстановить сессию для аккаунта {Id}", accountId);
+                _clientFactory.Reset();
+                _connectionStatus.SetDisconnected();
                 CurrentStep = AuthStep.NotStarted;
                 Notify();
                 return false;
@@ -148,79 +137,56 @@ public class TelegramAuthService(
         }
     }
 
-    public void SubmitInput(string value) => _pendingInput?.TrySetResult(value);
+    public void SubmitInput(string value) => _loginPrompt.SubmitInput(value);
 
     public async Task LogoutAsync()
     {
-        messageService.StopMonitoring();
+        _messageService.StopMonitoring();
 
-        var active = await accountStorage.GetActiveAccountAsync();
+        var active = await _accountStorage.GetActiveAccountAsync();
         if (active is not null)
         {
             try
             {
-                var client = clientFactory.GetCurrent();
-                await client.Auth_LogOut();
+                await _clientFactory.GetCurrent().Auth_LogOut();
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Auth_LogOut завершился с ошибкой, продолжаю локальный сброс");
+                _logger.LogWarning(ex, "Auth_LogOut завершился с ошибкой, продолжаю локальный сброс");
             }
         }
 
-        clientFactory.Reset();
+        _clientFactory.Reset();
         IsLoggedIn = false;
         CurrentStep = AuthStep.NotStarted;
-        connectionStatus.SetDisconnected();
+        _connectionStatus.SetDisconnected();
         Notify();
     }
 
     public async Task SwitchAccountAsync(int accountId)
     {
-        messageService.StopMonitoring();
-        clientFactory.Reset();
+        _messageService.StopMonitoring();
+        _clientFactory.Reset();
 
         var restored = await RestoreSessionAsync(accountId);
-
         if (!restored)
         {
-            await accountStorage.SetActiveAsync(accountId);
+            await _accountStorage.SetActiveAsync(accountId);
             CurrentStep = AuthStep.NotStarted;
             Notify();
         }
     }
 
-
-    private async Task SaveAuthenticatedAccountAsync(User user, byte[] sessionData)
-        => await accountStorage.SaveAccountAsync(
-            user.ID,
-            GetDisplayName(user),
-            user.phone,
-            sessionData);
+    private void OnLoginStepRequested(AuthStep step)
+    {
+        CurrentStep = step;
+        Notify();
+    }
 
     private static string GetDisplayName(User user) =>
         !string.IsNullOrEmpty(user.username)
             ? $"@{user.username}"
             : $"{user.first_name} {user.last_name}".Trim();
-
-    private string? ConfigCallback(string what) => what switch
-    {
-        "api_id" => clientFactory.ApiId,
-        "api_hash" => clientFactory.ApiHash,
-        "server_address" => "2>149.154.167.50:443",
-        "phone_number" => WaitForInput(AuthStep.WaitingPhone),
-        "verification_code" => WaitForInput(AuthStep.WaitingCode),
-        "password" => WaitForInput(AuthStep.WaitingPassword),
-        _ => null
-    };
-
-    private string? WaitForInput(AuthStep step)
-    {
-        _pendingInput = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        CurrentStep = step;
-        Notify();
-        return _pendingInput.Task.GetAwaiter().GetResult();
-    }
 
     private void Notify() => StateChanged?.Invoke();
 }
