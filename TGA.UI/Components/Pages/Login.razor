@@ -58,6 +58,10 @@
                         @(_syncing ? "Синхронизация диалогов..." : "Загрузить диалоги")
                     </MudButton>
                 }
+                @if (_syncError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mt-3">Ошибка синхронизации: @_syncError</MudAlert>
+                }
                 else if (Auth.CurrentStep == AuthStep.Error)
                 {
                     <MudAlert Severity="Severity.Error" Class="mb-6">
@@ -78,7 +82,7 @@
 
 @code {
     private string _input = string.Empty;
-    private string? _message = String.Empty;
+    private string? _syncError = null;
     private bool _loading;
     private bool _syncing;
 
@@ -129,15 +133,28 @@
         Auth.SubmitInput(_input);
         _input = string.Empty;
     }
+    
     private async Task SyncAndContinue()
     {
         _syncing = true;
+        _syncError = null;
         StateHasChanged();
 
-        await MessageService.SyncDialogsAsync();
-        MessageService.StartMonitoring();
-
-        NavigationManager.NavigateTo("/chats");
+        try
+        {
+            await MessageService.SyncDialogsAsync();
+            MessageService.StartMonitoring();
+            NavigationManager.NavigateTo("/chats");
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+        }
+        finally
+        {
+            _syncing = false;
+            StateHasChanged();
+        }
     }
 
     private void OnChanged() => InvokeAsync(StateHasChanged);

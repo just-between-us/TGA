@@ -21,6 +21,11 @@ public static class DependencyInjection
         services.AddHostedService<TelegramSessionRestoreHostedService>();
         services.AddSingleton<IConnectionStatusService, ConnectionStatusService>();
         services.AddSingleton<ISessionEncryptor, DataProtectionSessionEncryptor>();
+        services.AddSingleton<TelegramPeerDirectory>();
+        services.AddSingleton<TelegramPeerResolver>();
+        services.AddSingleton<TelegramContactResolver>();
+        services.AddSingleton<TelegramDialogSyncService>();
+        services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
         services.AddSingleton<IAccountStorageService, AccountStorageService>();
         services.AddSingleton<IMessageStorageService, MessageStorageService>();
         services.AddSingleton<TelegramClientFactory>();
