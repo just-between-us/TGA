@@ -1,7 +1,260 @@
 ﻿@page "/"
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
+@using TGA.Domain.Enums
+@inject ITelegramAuthService Auth
+@inject IAccountStorageService Accounts
+@inject IChatStorageService ChatStorage
+@inject IContactStorageService ContactStorage
+@inject IConnectionStatusService ConnectionStatus
+@inject IDebugLogSink LogSink
+@inject NavigationManager NavigationManager
+@implements IDisposable
 
-<h3>Home</h3>
+<PageTitle>Dashboard</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <div class="d-flex align-center mb-4">
+        <MudText Typo="Typo.h4">Состояние приложения</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Title="обновить"/>
+    </div>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudText Typo="Typo.h6" Class="mb-2">Подключение</MudText>
+        <MudStack Row="true" Spacing="10" Wrap="Wrap.Wrap" Class="align-stretch my-8">
+            <div>
+                <MudText Typo="Typo.caption" Color="Color.Primary">Статус соединения</MudText>
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@StatusIcon" Color="@StatusColor" Size="Size.Small" Class="mr-1" />
+                    <MudText>@ConnectionStatus.State</MudText>
+                </div>
+            </div>
+        
+            <div>
+                <MudText Typo="Typo.caption" Color="Color.Primary">Шаг авторизации</MudText>
+                <MudText Typo="Typo.body1">@Auth.CurrentStep</MudText>
+            </div>
+        
+            <div class="d-block">
+                <MudText Typo="Typo.caption" Color="Color.Primary">IsLoggedIn</MudText>
+                <MudText>@Auth.IsLoggedIn</MudText>
+            </div>
+        </MudStack>
+        <MudText Typo="Typo.body2">Текущее имя: @ConnectionStatus.UserDisplayName</MudText>
+
+        @if (!string.IsNullOrWhiteSpace(Auth.ErrorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3">@Auth.ErrorMessage</MudAlert>
+        }
+    </MudPaper>
+
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <div class="d-flex align-center mb-3">
+            <MudText Typo="Typo.h6">Аккаунты: @_accounts.Count шт.</MudText>
+            <MudSpacer />
+            @if (_accounts.Count == 0)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => NavigationManager.NavigateTo("/login"))">
+                    Войти
+                </MudButton>
+            }
+        </div>
+
+        @if (_loadingAccounts)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else if (_accounts.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">
+                Аккаунтов ещё нет — это первый запуск приложения. Перейдите на страницу входа.
+            </MudAlert>
+        }
+        else
+        {
+            @foreach (var acc in _accounts.OrderByDescending(a => a.IsActive).ThenByDescending(a => a.LastLoginAt))
+            {
+                <MudPaper Class="pa-3 mb-2" Elevation="0">
+                    <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
+                        <div class="d-flex align-center" style="gap: 8px;">
+                            <MudText Typo="Typo.subtitle1">@acc.DisplayName</MudText>
+                            @if (acc.IsActive)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success">активный</MudChip>
+                            }
+                        </div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Id: @acc.Id</MudText>
+                    </div>
+
+                    <MudSimpleTable Dense="true" Class="mt-2">
+                        <tbody>
+                            <tr><td>TelegramUserId</td><td>@acc.TelegramUserId</td></tr>
+                            <tr><td>Телефон</td><td>@(acc.PhoneNumber ?? "—")</td></tr>
+                            <tr><td>Создан</td><td>@acc.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td></tr>
+                            <tr><td>Последний вход</td><td>@(acc.LastLoginAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</td></tr>
+                            @if (acc.IsActive)
+                            {
+                                <tr><td>Чатов</td><td>@_activeChatCount</td></tr>
+                                <tr><td>Контактов</td><td>@_activeContactCount</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudPaper>
+            }
+        }
+    </MudPaper>
+
+    @* ---------- Debug-консоль ---------- *@
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <div class="d-flex align-center mb-3">
+            <MudText Typo="Typo.h6">Debug-консоль</MudText>
+            <MudSpacer/>
+            <MudSwitch @bind-Value="_autoRefresh" Color="Color.Primary" Label="Авто-обновление" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="ClearLogs" Title="Очистить" />
+        </div>
+        <MudTextField T="string" Placeholder="Фильтр по тексту" Value="_logFilter" ValueChanged="OnLogFilterChanged"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" Margin="Margin.Dense" FullWidth="true"/>
+
+        <div style="height: 400px; overflow-y: auto; background: var(--mud-palette-background-grey); border-radius: 4px;" class="pa-2">
+            @foreach (var entry in FilteredLogs)
+            {
+                <div class="mb-1" style="font-family: monospace; font-size: 12px;">
+                    <span style="color: var(--mud-palette-text-secondary);">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                    <MudChip T="string" Size="Size.Small" Class="mx-1" Color="@LevelColor(entry.Level)">@entry.Level</MudChip>
+                    <span style="color: var(--mud-palette-text-secondary);">@ShortCategory(entry.Category)</span>
+                    <span> — @entry.Message</span>
+                    @if (entry.Exception is not null)
+                    {
+                        <div style="color: var(--mud-palette-error); margin-left: 16px;">@entry.Exception</div>
+                    }
+                </div>
+            }
+            @if (FilteredLogs.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Записей нет</MudText>
+            }
+        </div>
+    </MudPaper>
+</MudContainer>
 
 @code {
-    
+    private List<AccountDto> _accounts = [];
+    private bool _loadingAccounts = true;
+    private int _activeChatCount;
+    private int _activeContactCount;
+
+    private List<LogEntryDto> _logs = [];
+    private string _logFilter = string.Empty;
+    private bool _autoRefresh = true;
+    private System.Timers.Timer? _refreshTimer;
+
+    private List<LogEntryDto> FilteredLogs =>
+        string.IsNullOrWhiteSpace(_logFilter)
+            ? _logs
+            : _logs.Where(l =>
+                l.Message.Contains(_logFilter, StringComparison.OrdinalIgnoreCase) ||
+                l.Category.Contains(_logFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.StateChanged += OnStateChanged;
+        ConnectionStatus.StateChanged += OnStateChanged;
+
+        await RefreshAsync();
+
+        _refreshTimer = new System.Timers.Timer(2000);
+        _refreshTimer.Elapsed += async (_, _) =>
+        {
+            if (!_autoRefresh) return;
+            await InvokeAsync(async () =>
+            {
+                RefreshLogs();
+                StateHasChanged();
+            });
+        };
+        _refreshTimer.Start();
+    }
+
+    private void OnStateChanged() => InvokeAsync(async () =>
+    {
+        await RefreshAsync();
+        StateHasChanged();
+    });
+
+    private async Task RefreshAsync()
+    {
+        _loadingAccounts = true;
+        StateHasChanged();
+
+        _accounts = await Accounts.GetAllAccountsAsync();
+
+        var active = _accounts.FirstOrDefault(a => a.IsActive);
+        if (active is not null)
+        {
+            var chats = await ChatStorage.GetChatSummariesAsync(active.Id);
+            var contacts = await ContactStorage.GetAllAsync(active.Id);
+            _activeChatCount = chats.Count;
+            _activeContactCount = contacts.Count;
+        }
+        else
+        {
+            _activeChatCount = 0;
+            _activeContactCount = 0;
+        }
+
+        RefreshLogs();
+        _loadingAccounts = false;
+    }
+
+    private void RefreshLogs() => _logs = LogSink.GetRecent().ToList();
+
+    private void OnLogFilterChanged(string value) => _logFilter = value;
+
+    private void ClearLogs()
+    {
+        LogSink.Clear();
+        _logs.Clear();
+    }
+
+    private string StatusIcon => ConnectionStatus.State switch
+    {
+        ConnectionState.Connecting => Icons.Material.Filled.SyncProblem,
+        ConnectionState.Updating => Icons.Material.Filled.Sync,
+        ConnectionState.Connected => Icons.Material.Filled.CheckCircle,
+        ConnectionState.Disconnected => Icons.Material.Filled.CloudOff,
+        _ => Icons.Material.Filled.HelpOutline
+    };
+
+    private Color StatusColor => ConnectionStatus.State switch
+    {
+        ConnectionState.Connecting => Color.Warning,
+        ConnectionState.Updating => Color.Info,
+        ConnectionState.Connected => Color.Success,
+        ConnectionState.Disconnected => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color LevelColor(string level) => level switch
+    {
+        "Error" or "Critical" => Color.Error,
+        "Warning" => Color.Warning,
+        "Information" => Color.Info,
+        _ => Color.Default
+    };
+
+    private static string ShortCategory(string category)
+    {
+        var lastDot = category.LastIndexOf('.');
+        return lastDot >= 0 ? category[(lastDot + 1)..] : category;
+    }
+
+    public void Dispose()
+    {
+        Auth.StateChanged -= OnStateChanged;
+        ConnectionStatus.StateChanged -= OnStateChanged;
+        _refreshTimer?.Stop();
+        _refreshTimer?.Dispose();
+    }
 }

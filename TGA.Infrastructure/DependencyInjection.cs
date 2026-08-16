@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TGA.Contract.Abstractions;
+using TGA.Infrastructure.Diagnostics;
 using TGA.Infrastructure.Import;
 using TGA.Infrastructure.Persistence;
 using TGA.Infrastructure.Security;

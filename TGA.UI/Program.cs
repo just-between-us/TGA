@@ -3,10 +3,15 @@ using MudBlazor.Services;
 using TGA.Application;
 using TGA.Contract.Options;
 using TGA.Infrastructure;
+using TGA.Infrastructure.Diagnostics;
 using TGA.Infrastructure.Persistence;
 using TGA.UI.Components;
 
 var builder = WebApplication.CreateBuilder(args);
+var logSink = new TGA.Infrastructure.Diagnostics.InMemoryLogSink();
+
+builder.Services.AddSingleton<TGA.Contract.Abstractions.IDebugLogSink>(logSink);
+builder.Logging.AddProvider(new TGA.Infrastructure.Diagnostics.InMemoryLoggerProvider(logSink));
 
 TaskScheduler.UnobservedTaskException += (sender, args) =>
 {

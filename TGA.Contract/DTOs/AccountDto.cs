@@ -6,4 +6,5 @@ public record AccountDto(
     string DisplayName,
     string? PhoneNumber,
     bool IsActive,
+    DateTime CreatedAt,
     DateTime? LastLoginAt);

@@ -14,7 +14,7 @@ public class AccountStorageService(
         await using var db = await dbFactory.CreateDbContextAsync();
         return await db.Accounts
             .OrderByDescending(a => a.LastLoginAt)
-            .Select(a => new AccountDto(a.Id, a.TelegramUserId, a.DisplayName, a.PhoneNumber, a.IsActive, a.LastLoginAt))
+            .Select(a => new AccountDto(a.Id, a.TelegramUserId, a.DisplayName, a.PhoneNumber, a.IsActive, a.CreatedAt, a.LastLoginAt))
             .ToListAsync();
     }
 
@@ -22,8 +22,10 @@ public class AccountStorageService(
     {
         await using var db = await dbFactory.CreateDbContextAsync();
         var active = await db.Accounts.FirstOrDefaultAsync(a => a.IsActive);
-        return active is null ? null
-            : new AccountDto(active.Id, active.TelegramUserId, active.DisplayName, active.PhoneNumber, active.IsActive, active.LastLoginAt);
+        return active is null
+            ? null
+            : new AccountDto(active.Id, active.TelegramUserId, active.DisplayName, active.PhoneNumber, active.IsActive,
+                active.CreatedAt, active.LastLoginAt);
     }
     
     public async Task UpdateSessionDataAsync(int accountId, byte[] sessionData)
@@ -85,7 +87,7 @@ public class AccountStorageService(
         await using var db = await dbFactory.CreateDbContextAsync();
         var acc = await db.Accounts.FindAsync(accountId);
         return acc is null ? null
-            : new AccountDto(acc.Id, acc.TelegramUserId, acc.DisplayName, acc.PhoneNumber, acc.IsActive, acc.LastLoginAt);
+            : new AccountDto(acc.Id, acc.TelegramUserId, acc.DisplayName, acc.PhoneNumber, acc.IsActive, acc.CreatedAt, acc.LastLoginAt);
     }
     public async Task DeleteAsync(int accountId)
     {
