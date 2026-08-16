@@ -1,0 +1,22 @@
+.mud-nav-link {
+    display: flex;
+    align-items: center;
+}
+
+.mud-nav-link-text {
+    font-size: 1.1rem;
+    transform: translateY(-1px);  
+    display: inline-block;        
+}
+
+.mud-nav-link:hover .mud-nav-link-icon {
+    transform: translateY(-2px) rotate(-5deg);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mud-nav-link .mud-nav-link-icon {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.mud-nav-link:hover .mud-nav-link-icon {
+    transform: translateY(-3px) rotate(-5deg) scale(1.05);
+} 

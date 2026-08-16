@@ -20,36 +20,49 @@
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Title="обновить"/>
     </div>
 
-    <MudPaper Class="pa-4 mb-4" Elevation="2">
-        <MudText Typo="Typo.h6" Class="mb-2">Подключение</MudText>
-        <MudStack Row="true" Spacing="10" Wrap="Wrap.Wrap" Class="align-stretch my-8">
-            <div>
+    <MudGrid Class="pb-6">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
                 <MudText Typo="Typo.caption" Color="Color.Primary">Статус соединения</MudText>
-                <div class="d-flex align-center">
+                <div class="d-flex align-center mt-1">
                     <MudIcon Icon="@StatusIcon" Color="@StatusColor" Size="Size.Small" Class="mr-1" />
                     <MudText>@ConnectionStatus.State</MudText>
                 </div>
-            </div>
-        
-            <div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
                 <MudText Typo="Typo.caption" Color="Color.Primary">Шаг авторизации</MudText>
-                <MudText Typo="Typo.body1">@Auth.CurrentStep</MudText>
-            </div>
-        
-            <div class="d-block">
+                <MudText Typo="Typo.body1" Class="mt-1">@Auth.CurrentStep</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
                 <MudText Typo="Typo.caption" Color="Color.Primary">IsLoggedIn</MudText>
-                <MudText>@Auth.IsLoggedIn</MudText>
-            </div>
-        </MudStack>
-        <MudText Typo="Typo.body2">Текущее имя: @ConnectionStatus.UserDisplayName</MudText>
+                <MudText Class="mt-1">@Auth.IsLoggedIn</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudText Typo="Typo.caption" Color="Color.Primary">Текущее имя</MudText>
+                @if (ConnectionStatus.State == ConnectionState.Connected && !string.IsNullOrEmpty(ConnectionStatus.UserDisplayName))
+                {
+                    <MudText Class="mt-1">@ConnectionStatus.UserDisplayName</MudText>
+                }
+                else
+                {
+                    <MudSkeleton Class="mt-1" SkeletonType="SkeletonType.Text" Width="120px" />
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-        @if (!string.IsNullOrWhiteSpace(Auth.ErrorMessage))
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-3">@Auth.ErrorMessage</MudAlert>
-        }
-    </MudPaper>
+    @if (!string.IsNullOrWhiteSpace(Auth.ErrorMessage))
+    {
+        <MudAlert Severity="Severity.Error" Class="mt-3">@Auth.ErrorMessage</MudAlert>
+    }
 
-    <MudPaper Class="pa-4 mb-4" Elevation="2">
+    <MudPaper Class="pa-4 mb-6" Elevation="2">
         <div class="d-flex align-center mb-3">
             <MudText Typo="Typo.h6">Аккаунты: @_accounts.Count шт.</MudText>
             <MudSpacer />
@@ -84,7 +97,7 @@
                                 <MudChip T="string" Size="Size.Small" Color="Color.Success">активный</MudChip>
                             }
                         </div>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Id: @acc.Id</MudText>
+                        <MudChip T="string" Variant="Variant.Text" Color="Color.Secondary">Id: @acc.Id</MudChip>
                     </div>
 
                     <MudSimpleTable Dense="true" Class="mt-2">
@@ -117,23 +130,28 @@
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       Immediate="true" Margin="Margin.Dense" FullWidth="true"/>
 
-        <div style="height: 400px; overflow-y: auto; background: var(--mud-palette-background-grey); border-radius: 4px;" class="pa-2">
-            @foreach (var entry in FilteredLogs)
+        <div style="height: 400px; overflow-y: auto; background: var(--mud-palette-background-grey); border-radius: 4px;" class="pa-2 d-flex flex-column">
+            @if (FilteredLogs.Any())
             {
-                <div class="mb-1" style="font-family: monospace; font-size: 12px;">
-                    <span style="color: var(--mud-palette-text-secondary);">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
-                    <MudChip T="string" Size="Size.Small" Class="mx-1" Color="@LevelColor(entry.Level)">@entry.Level</MudChip>
-                    <span style="color: var(--mud-palette-text-secondary);">@ShortCategory(entry.Category)</span>
-                    <span> — @entry.Message</span>
-                    @if (entry.Exception is not null)
-                    {
-                        <div style="color: var(--mud-palette-error); margin-left: 16px;">@entry.Exception</div>
-                    }
-                </div>
+                foreach (var entry in FilteredLogs)
+                {
+                    <div class="mb-1" style="font-family: monospace; font-size: 12px;">
+                        <span style="color: var(--mud-palette-text-secondary);">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                        <MudChip T="string" Size="Size.Small" Class="mx-1" Color="@LevelColor(entry.Level)">@entry.Level</MudChip>
+                        <span style="color: var(--mud-palette-text-secondary);">@ShortCategory(entry.Category)</span>
+                        <span> — @entry.Message</span>
+                        @if (entry.Exception is not null)
+                        {
+                            <div style="color: var(--mud-palette-error); margin-left: 16px;">@entry.Exception</div>
+                        }
+                    </div>
+                }
             }
-            @if (FilteredLogs.Count == 0)
+            else
             {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Записей нет</MudText>
+                <div class="d-flex align-center justify-center" style="height: 100%;">
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Записей пока нет</MudText>
+                </div>
             }
         </div>
     </MudPaper>
