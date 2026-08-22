@@ -18,37 +18,10 @@ public class TelegramSessionRestorer(
         int accountId, byte[] sessionData, Func<string, string?> configCallback)
     {
         var client = clientFactory.CreateNew(configCallback, sessionData);
-
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var loginTask = client.LoginUserIfNeeded();
-        var completed = await Task.WhenAny(loginTask, Task.Delay(LoginTimeout));
-
-        string? displayName;
-
-        if (completed == loginTask)
-        {
-            var user = await loginTask;
-            logger.LogInformation("LoginUserIfNeeded для {Id} завершился за {Elapsed}мс", accountId, stopwatch.ElapsedMilliseconds);
-            displayName = GetDisplayName(user);
-        }
-        else
-        {
-            logger.LogInformation(
-                "Логин для аккаунта {Id} ещё не завершён после {Elapsed}мс, продолжаю использовать сохранённую сессию",
-                accountId, stopwatch.ElapsedMilliseconds);
-
-            var account = await accountStorage.GetByIdAsync(accountId);
-            displayName = account?.DisplayName;
-
-            _ = loginTask.ContinueWith(t =>
-            {
-                logger.LogInformation(
-                    "Отложенный логин для {Id} фактически завершился за {Elapsed}мс, IsFaulted={Faulted}",
-                    accountId, stopwatch.ElapsedMilliseconds, t.IsFaulted);
-                if (t.IsFaulted)
-                    logger.LogWarning(t.Exception, "Отложенный логин для аккаунта {Id} завершился с ошибкой", accountId);
-            }, TaskScheduler.Default);
-        }
+        _ = client.LoginUserIfNeeded();
+        
+        var account = await accountStorage.GetByIdAsync(accountId);
+        var displayName = account?.DisplayName;
 
         await accountStorage.SetActiveAsync(accountId);
         await accountStorage.UpdateSessionDataAsync(accountId, clientFactory.GetCurrentSessionBytes());

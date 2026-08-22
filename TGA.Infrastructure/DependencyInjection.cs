@@ -20,6 +20,11 @@ public static class DependencyInjection
         services.AddDataProtection();
 
         services.AddHostedService<TelegramSessionRestoreHostedService>();
+        
+        /* services.AddHostedService<TelegramHealthCheckService>();
+         пока отключил, т.к. метод, который там используется не может эффективно дать информацию о текущем статусе авторизации в аккаунт 
+         -> а именно если устройство выкинули из другого клиента - то метод все ещё работает, а фактически писать уже нельзя*/
+        
         services.AddSingleton<IConnectionStatusService, ConnectionStatusService>();
         services.AddSingleton<ISessionEncryptor, DataProtectionSessionEncryptor>();
         services.AddSingleton<TelegramPeerDirectory>();
