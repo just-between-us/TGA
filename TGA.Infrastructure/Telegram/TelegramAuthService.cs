@@ -109,7 +109,7 @@ public class TelegramAuthService : ITelegramAuthService
                 _messageService.StopMonitoring();
                 _clientFactory.Reset();
 
-                var result = await _sessionRestorer.TryRestoreAsync(accountId, sessionData, _loginPrompt.ConfigCallback);
+                var result = await _sessionRestorer.TryRestoreAsync(accountId, sessionData, _loginPrompt.ConfigCallback); //Вот тут может быть надо номер аккаунта вместо конфига
 
                 IsLoggedIn = true;
                 CurrentStep = AuthStep.Done;

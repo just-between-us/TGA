@@ -1,0 +1,176 @@
+﻿@page "/llm-settings"
+@using TGA.Application.Llm
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs.Llm
+@using TGA.Domain.Enums
+@inject ILlmSettingsStorageService SettingsStorage
+@inject LlmTestService TestService
+@inject ISnackbar Snackbar
+
+<PageTitle>Настройки LLM</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Настройки LLM-провайдера</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_name" Label="Название профиля" Variant="Variant.Outlined" />
+
+                <MudSelect T="LlmProvider" Value="_provider" Label="Провайдер" Variant="Variant.Outlined"
+                           ValueChanged="OnProviderChanged">
+                    <MudSelectItem Value="LlmProvider.OpenRouter">OpenRouter</MudSelectItem>
+                    <MudSelectItem Value="LlmProvider.HuggingFace">HuggingFace</MudSelectItem>
+                    <MudSelectItem Value="LlmProvider.Custom">Свой (OpenAI-совместимый)</MudSelectItem>
+                </MudSelect>
+
+                <MudTextField @bind-Value="_baseUrl" Label="Base URL" Variant="Variant.Outlined"
+                              HelperText="Например: https://openrouter.ai/api/v1" />
+
+                <MudTextField @bind-Value="_apiKey" Label="API-ключ" Variant="Variant.Outlined"
+                              InputType="InputType.Password" />
+
+                <MudTextField @bind-Value="_model" Label="Модель" Variant="Variant.Outlined"
+                              HelperText="Например: anthropic/claude-3.5-sonnet" />
+
+                <MudTextField @bind-Value="_systemPrompt" Label="Системный промпт" Variant="Variant.Outlined"
+                              Lines="6" />
+
+                <MudSlider @bind-Value="_temperature" Min="0.0" Max="2.0" Step="0.1" Class="mt-4">
+                    Temperature: @_temperature.ToString("0.0")
+                </MudSlider>
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">
+                    Сохранить
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 600px;">
+            <MudText Typo="Typo.h6" Class="mb-2">Тестовый чат</MudText>
+
+            <MudStack Spacing="2" Class="flex-grow-1" Style="overflow-y:auto;">
+                @foreach (var msg in _testHistory)
+                {
+                    <MudPaper Class="pa-2"
+                              Style="@(msg.Role == LlmRole.User ? "align-self:flex-end; background:var(--mud-palette-primary-lighten);" : "align-self:flex-start;")">
+                        <MudText Typo="Typo.caption">@(msg.Role == LlmRole.User ? "Вы" : "Ассистент")</MudText>
+                        <MudText Style="white-space:pre-wrap;">@msg.Content</MudText>
+                    </MudPaper>
+                }
+                @if (_sending)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                }
+            </MudStack>
+
+            <MudStack Row="true" Class="mt-2">
+                <MudTextField @bind-Value="_testInput" Placeholder="Тестовое сообщение..." Variant="Variant.Outlined"
+                              Class="flex-grow-1" Immediate="true" OnKeyDown="OnTestInputKeyDown" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendTestMessageAsync" Disabled="_sending">
+                    Отправить
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="ClearHistory">
+                    Очистить
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private string _name = "Default";
+    private LlmProvider _provider = LlmProvider.OpenRouter;
+    private string _baseUrl = "https://openrouter.ai/api/v1";
+    private string _apiKey = string.Empty;
+    private string _model = string.Empty;
+    private string? _systemPrompt;
+    private double _temperature = 0.7;
+    private bool _saving;
+
+    private readonly List<LlmChatMessage> _testHistory = [];
+    private string _testInput = string.Empty;
+    private bool _sending;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var active = await SettingsStorage.GetActiveAsync();
+        if (active is null) return;
+
+        _name = active.Name;
+        _provider = active.Provider;
+        _baseUrl = active.BaseUrl;
+        _apiKey = active.ApiKey;
+        _model = active.Model;
+        _systemPrompt = active.SystemPrompt;
+        _temperature = active.Temperature;
+    }
+
+    private void OnProviderChanged(LlmProvider provider)
+    {
+        _provider = provider;
+        _baseUrl = provider switch
+        {
+            LlmProvider.OpenRouter => "https://openrouter.ai/api/v1",
+            LlmProvider.HuggingFace => "https://router.huggingface.co/v1",
+            _ => _baseUrl
+        };
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await SettingsStorage.SaveAsync(_name, _provider, _baseUrl, _apiKey, _model, _systemPrompt, _temperature);
+            Snackbar.Add("Настройки сохранены", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка сохранения: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SendTestMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_testInput) || _sending) return;
+
+        var userMessage = _testInput;
+        _testInput = string.Empty;
+        _testHistory.Add(new LlmChatMessage(LlmRole.User, userMessage));
+        _sending = true;
+
+        try
+        {
+            var currentSettings = new LlmProviderSettingsDto(
+                0, _name, _provider, _baseUrl, _apiKey, _model, _systemPrompt, _temperature, true, DateTime.UtcNow);
+
+            var historyForRequest = _testHistory.Take(_testHistory.Count - 1).ToList();
+            var reply = await TestService.SendTestMessageAsync(historyForRequest, userMessage, currentSettings);
+
+            _testHistory.Add(new LlmChatMessage(LlmRole.Assistant, reply));
+        }
+        catch (Exception ex)
+        {
+            _testHistory.Add(new LlmChatMessage(LlmRole.Assistant, $"Ошибка: {ex.Message}"));
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private void ClearHistory() => _testHistory.Clear();
+
+    private async Task OnTestInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await SendTestMessageAsync();
+    }
+}

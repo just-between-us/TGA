@@ -21,11 +21,12 @@ TaskScheduler.UnobservedTaskException += (sender, args) =>
 
 builder.Services.AddMudServices();
 
-builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
-
+builder.Services.Configure<AutoReplyOptions>(builder.Configuration.GetSection("AutoReply"));
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.Configure<HistoryLoadOptions>(builder.Configuration.GetSection(HistoryLoadOptions.SectionName));
+
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

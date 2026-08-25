@@ -4,7 +4,10 @@ using WTelegram;
 
 namespace TGA.Infrastructure.Telegram;
 
-public class TelegramClientFactory(IOptions<TelegramOptions> options)
+public class TelegramClientFactory(
+    IOptions<TelegramOptions> options,
+    TelegramOtherUpdateNotifier otherUpdateNotifier
+    )
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
 
@@ -23,14 +26,17 @@ public class TelegramClientFactory(IOptions<TelegramOptions> options)
             {
                 return _current;
             }
-
+            
+            if (_current is not null)
+                otherUpdateNotifier.Detach(_current);
+            
             _current?.Dispose();
             _sessionStream?.Dispose();
 
             _sessionStream = CreateExpandableStream(existingSessionData);
 
             _current = new Client(configCallback, _sessionStream);
-
+            
             return _current;
         }
         finally

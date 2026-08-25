@@ -2,8 +2,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TGA.Contract.Abstractions;
+using TGA.Infrastructure.AutoReply;
 using TGA.Infrastructure.Diagnostics;
 using TGA.Infrastructure.Import;
+using TGA.Infrastructure.Llm;
 using TGA.Infrastructure.Persistence;
 using TGA.Infrastructure.Security;
 using TGA.Infrastructure.Telegram;
@@ -25,25 +27,42 @@ public static class DependencyInjection
          пока отключил, т.к. метод, который там используется не может эффективно дать информацию о текущем статусе авторизации в аккаунт 
          -> а именно если устройство выкинули из другого клиента - то метод все ещё работает, а фактически писать уже нельзя*/
         
+        
+        services.AddSingleton<IAccountStorageService, AccountStorageService>();
+        services.AddSingleton<IMessageStorageService, MessageStorageService>();
+        services.AddSingleton<IContactStorageService, ContactStorageService>();
+        services.AddSingleton<IContactProfileStorageService, ContactProfileStorageService>();
+        services.AddSingleton<IChatStorageService, ChatStorageService>();
+        
+        services.AddSingleton<TelegramClientFactory>();
+        
+        services.AddSingleton<TelegramOtherUpdateNotifier>();
+        services.AddSingleton<ITelegramOtherUpdateNotifier>(sp => sp.GetRequiredService<TelegramOtherUpdateNotifier>());
+        
+        services.AddSingleton<ITelegramAuthService, TelegramAuthService>();
+        services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
+        
         services.AddSingleton<IConnectionStatusService, ConnectionStatusService>();
+        services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
+        
         services.AddSingleton<ISessionEncryptor, DataProtectionSessionEncryptor>();
+        
+        services.AddSingleton<TelegramContactSyncService>();
         services.AddSingleton<TelegramPeerDirectory>();
         services.AddSingleton<TelegramPeerResolver>();
         services.AddSingleton<TelegramContactResolver>();
         services.AddSingleton<TelegramDialogSyncService>();
         services.AddSingleton<TelegramLoginPrompt>();
         services.AddSingleton<TelegramSessionRestorer>();
-        services.AddSingleton<ITelegramAuthService, TelegramAuthService>();
-        services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
-        services.AddSingleton<IAccountStorageService, AccountStorageService>();
-        services.AddSingleton<IMessageStorageService, MessageStorageService>();
-        services.AddSingleton<TelegramClientFactory>();
-        services.AddSingleton<IChatStorageService, ChatStorageService>();
-        services.AddSingleton<IContactProfileStorageService, ContactProfileStorageService>();
-        services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
-        services.AddSingleton<ITelegramAuthService, TelegramAuthService>();
-        services.AddSingleton<IContactStorageService, ContactStorageService>();
+        
         services.AddScoped<IExportImportService, ExportImportService>();
+        
+        services.AddHttpClient("llm");
+        services.AddSingleton<ILlmSettingsStorageService, LlmSettingsStorageService>();
+        services.AddSingleton<ILlmClient, OpenAiCompatibleLlmClient>();
+        services.AddSingleton<ITriageService, TriageService>();
+        services.AddSingleton<AutoReplyDebounceService>();
+        services.AddHostedService<AutoReplySubscriberHostedService>();
 
         return services;
     }

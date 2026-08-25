@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ContactProfile> ContactProfiles => Set<ContactProfile>();
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<TelegramAccount> Accounts => Set<TelegramAccount>();
+    public DbSet<LlmProviderSettings> LlmProviderSettings => Set<LlmProviderSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

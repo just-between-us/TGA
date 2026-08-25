@@ -18,10 +18,8 @@ public class TelegramSessionRestorer(
         int accountId, byte[] sessionData, Func<string, string?> configCallback)
     {
         var client = clientFactory.CreateNew(configCallback, sessionData);
-        _ = client.LoginUserIfNeeded();
-        
-        var account = await accountStorage.GetByIdAsync(accountId);
-        var displayName = account?.DisplayName;
+        var user = await client.LoginUserIfNeeded();
+        var displayName = GetDisplayName(user);
 
         await accountStorage.SetActiveAsync(accountId);
         await accountStorage.UpdateSessionDataAsync(accountId, clientFactory.GetCurrentSessionBytes());

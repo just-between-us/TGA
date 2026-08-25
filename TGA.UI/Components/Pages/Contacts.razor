@@ -11,14 +11,20 @@
 <PageTitle>Контакты</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <div class="d-flex align-center mb-4">
+    <div class="d-flex align-center mb-4" style="gap: 8px;">
         <MudText Typo="Typo.h4">Контакты</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
                    StartIcon="@Icons.Material.Filled.Sync"
-                   Disabled="@_syncing"
+                   Disabled="@(_syncing || _importing)"
                    OnClick="SyncContactsAsync">
-            @(_syncing ? "Синхронизация..." : "Синхронизировать из Telegram")
+            @(_syncing ? "Синхронизация..." : "Синхронизировать диалоги")
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.ContactPage"
+                   Disabled="@(_syncing || _importing)"
+                   OnClick="ImportTelegramContactsAsync">
+            @(_importing ? "Импорт..." : "Импортировать контакты Telegram")
         </MudButton>
     </div>
 
@@ -122,6 +128,7 @@
     private int _accountId;
     private string _displayName = string.Empty;
     private bool _resolvingName;
+    private bool _importing;
 
     private bool _editorVisible;
     private ContactProfileDto? _editing;
@@ -156,14 +163,14 @@
 
     private async Task SyncContactsAsync()
     {
-        /*_syncing = true;
+        _syncing = true;
         StateHasChanged();
 
         try
         {
-            var count = await TelegramSvc.SyncContactsAsync();
+            var count = await TelegramSvc.SyncDialogsAsync();
             await RefreshAsync();
-            Snackbar.Add($"Синхронизировано контактов: {count}", Severity.Success);
+            Snackbar.Add($"Синхронизировано диалогов: {count}", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -173,7 +180,29 @@
         {
             _syncing = false;
             StateHasChanged();
-        }*/
+        }
+    }
+
+    private async Task ImportTelegramContactsAsync()
+    {
+        _importing = true;
+        StateHasChanged();
+
+        try
+        {
+            var count = await TelegramSvc.SyncTelegramContactsAsync();
+            await RefreshAsync();
+            Snackbar.Add($"Импортировано контактов: {count}", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка импорта контактов: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _importing = false;
+            StateHasChanged();
+        }
     }
 
     private void OpenEditor(ContactProfileDto contact)

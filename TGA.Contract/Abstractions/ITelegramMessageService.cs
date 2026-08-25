@@ -15,4 +15,5 @@ public interface ITelegramMessageService
 
     Task<MessageDto> SendMessageAsync(long peerUserId, string text);
     Task<string?> ResolveUserDisplayNameAsync(long peerUserId);
+    Task<int> SyncTelegramContactsAsync();
 }

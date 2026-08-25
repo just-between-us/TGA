@@ -15,6 +15,7 @@ public class TelegramMessageService(
     TelegramPeerResolver peerResolver,
     TelegramContactResolver contactResolver,
     TelegramDialogSyncService dialogSyncService,
+    TelegramContactSyncService contactSyncService, 
     ILogger<TelegramMessageService> logger) : ITelegramMessageService
 {
     public event Action<MessageDto>? OnNewMessageReceived;
@@ -77,6 +78,11 @@ public class TelegramMessageService(
 
         return await storage.GetMessagesByPeerAsync(active.Id, peerUserId);
     }
+    public async Task<int> SyncTelegramContactsAsync()
+    {
+        var client = RequireClient();
+        return await contactSyncService.SyncAsync(client);
+    }
 
     public void StartMonitoring()
     {
@@ -132,6 +138,7 @@ public class TelegramMessageService(
                 await ProcessNewMessage(message);
         }
     }
+    
 
     private async Task ProcessNewMessage(Message message)
     {

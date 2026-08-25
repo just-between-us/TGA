@@ -1,5 +1,8 @@
 ﻿@inherits LayoutComponentBase
+@inject ITelegramOtherUpdateNotifier OtherUpdates
+@inject ISnackbar Snackbar
 @using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
 @using TGA.Domain.Enums
 @inject IConnectionStatusService ConnectionStatus
 @implements IDisposable
@@ -13,7 +16,7 @@
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())"/>
         <MudText Typo="Typo.h5" Class="ml-3"><b>TGA</b></MudText>
         <MudChip Icon="@StatusIcon" Class="mx-8" Variant="Variant.Text" Color="StatusColor" T="string">
-                @StatusLabel
+            @StatusLabel
         </MudChip>
         <MudSpacer/>
         <MudIconButton Icon="@(DarkLightModeButtonIcon)" Color="Color.Inherit" OnClick="@DarkModeToggle"/>
@@ -50,16 +53,26 @@
             LayoutProperties = new LayoutProperties()
         };
         ConnectionStatus.StateChanged += OnConnectionStateChanged;
+        OtherUpdates.OtherUpdateReceived += OnOtherUpdateReceived;
     }
-    
+
     private void OnConnectionStateChanged()
     {
         _ = InvokeAsync(StateHasChanged);
     }
-
+    
+    private void OnOtherUpdateReceived(TelegramOtherUpdateDto update)
+    {
+        InvokeAsync(() =>
+        {
+            Snackbar.Add($"{update.TypeName}: {update.Description}", Severity.Info);
+        });
+    }
+    
     public void Dispose()
     {
         ConnectionStatus.StateChanged -= OnConnectionStateChanged;
+        OtherUpdates.OtherUpdateReceived -= OnOtherUpdateReceived;
     }
 
     private string StatusLabel => ConnectionStatus.State switch
