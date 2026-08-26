@@ -12,12 +12,14 @@ public class TelegramSessionRestorer(
     IAccountStorageService accountStorage,
     ILogger<TelegramSessionRestorer> logger)
 {
-    private static readonly TimeSpan LoginTimeout = TimeSpan.FromSeconds(10);
-
     public async Task<SessionRestoreResult> TryRestoreAsync(
-        int accountId, byte[] sessionData, Func<string, string?> configCallback)
+        int accountId, byte[] sessionData, Func<string, string?> interactiveFallback)
     {
-        var client = clientFactory.CreateNew(configCallback, sessionData);
+        var account = await accountStorage.GetByIdAsync(accountId);
+
+        var callback = BuildRestoreCallback(account?.PhoneNumber, interactiveFallback);
+
+        var client = clientFactory.CreateNew(callback, sessionData);
         var user = await client.LoginUserIfNeeded();
         var displayName = GetDisplayName(user);
 
@@ -26,6 +28,13 @@ public class TelegramSessionRestorer(
 
         return new SessionRestoreResult(true, displayName);
     }
+
+    private static Func<string, string?> BuildRestoreCallback(string? knownPhone, Func<string, string?> fallback) =>
+        what => what switch
+        {
+            "phone_number" when !string.IsNullOrWhiteSpace(knownPhone) => knownPhone,
+            _ => fallback(what)
+        };
 
     private static string GetDisplayName(User user) =>
         !string.IsNullOrEmpty(user.username)
