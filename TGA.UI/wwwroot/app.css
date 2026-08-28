@@ -19,4 +19,104 @@
 }
 .mud-nav-link:hover .mud-nav-link-icon {
     transform: translateY(-3px) rotate(-5deg) scale(1.05);
-} 
+}
+
+
+.tga-logo {
+    --tga-color: #2b7be4;
+
+    --pixel-size: 9px;
+    --pixel-gap: 2px;
+
+    width: 155px;
+    height: 50px;
+
+    margin-left: 12px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    position: relative;
+
+    color: var(--tga-color);
+
+    cursor: pointer;
+    user-select: none;
+
+    overflow: visible;
+}
+
+
+.tga-logo-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(13, var(--pixel-size));
+
+    grid-template-rows:
+        repeat(4, var(--pixel-size));
+
+    gap: var(--pixel-gap);
+
+    filter:
+            drop-shadow(
+                    0 0 5px
+                    rgba(43, 123, 228, 0.16)
+            );
+
+    transform-origin: center;
+}
+
+
+.tga-cell {
+    width: var(--pixel-size);
+    height: var(--pixel-size);
+
+    pointer-events: none;
+}
+
+
+.tga-pixel {
+    width: var(--pixel-size);
+    height: var(--pixel-size);
+
+    background: var(--tga-color);
+
+    pointer-events: none;
+
+    will-change:
+            transform,
+            opacity;
+}
+
+
+.tga-logo-accessibility {
+    position: absolute;
+
+    width: 1px;
+    height: 1px;
+
+    padding: 0;
+    margin: -1px;
+
+    overflow: hidden;
+
+    clip: rect(0, 0, 0, 0);
+
+    white-space: nowrap;
+
+    border: 0;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+
+    .tga-pixel {
+        opacity: 1 !important;
+
+        transform:
+                translate3d(0, 0, 0)
+                scale(1) !important;
+    }
+}
