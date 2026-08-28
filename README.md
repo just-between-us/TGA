@@ -1,0 +1,64 @@
+<img width="1079" height="729" alt="image" src="https://github.com/user-attachments/assets/fbfe44fe-03c0-42c3-bfdf-f4af5d1259fc" />
+и этим всё сказано 
+
+автоответчик + реакт. агент для телеграмма (я хочу всех игнорить)
+
+Как начать:
+
+1. Копировать репозиторий
+2. Создать файл: TGA.UI\appsettings.json, подставить свои ApiId и ApiHash, остальное советую не менять...
+
+```
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  
+  "AllowedHosts": "*",
+  
+  "Telegram": {
+    "ApiId": "ПОСМОТРЕТЬ НА my.telegram.org",
+    "ApiHash": "ПОСМОТРЕТЬ НА my.telegram.org"
+  },
+  
+  "ConnectionStrings": { 
+    "Default": "Data Source=telegram_assistant.db"
+  },
+  
+  "HistoryLoad": { 
+    "DefaultMessagesPerDialog": 20,
+    "MaxMessagesPerDialog": 100
+  },
+  
+  "AutoReply": {
+    "DebounceSeconds": 7,
+    "MaxWaitExtensions": 3,
+    "HistoryContextSize": 15
+  },
+  
+  "Agent": {
+    "MaxClarifications": 2,
+    "MaxToolIterations": 6,
+    "GhostStyleExampleCount": 12
+  }
+}
+
+```
+3. ВКЛЮЧИТЬ ХОРОШИЙ ВПН (это очень сильно влияет на вход) (работал с v2RayTun, но тоже через раз)
+4. запустить из UI -> откроется на порту http://localhost:5213 (см. консоль)
+5. перейти в `/login` "Вход" и начать auth flow
+6. возможно придётся долго подождать (логи можно посмотреть на Главной)
+7. проходим аутентификацию и ОБЯЗАТЕЛЬНО нажимаем "загрузить диалоги"
+
+Фактически клиент создан, но что бы настроить агента:
+
+1. переходим в `/llm-settings` Агент - заполняем форму и проверяем работоспособность (произвольно)
+2. открываем `/contacts` Контакты и начинаем редактирование любого интересующего контакта (правый столбец с карандашиком)
+3. заполняем форму (произвольно, согласно подсказкам) и включаем автоответчик
+4. просим выбранный контакт написать пару сообщений, открываем Главную и ждём 7 сек. после последнего пришедшего сообщения
+5. произойдёт Триаж - он решит ответить или проигнорировать
+6. если решение ответить, то агент ответит.
