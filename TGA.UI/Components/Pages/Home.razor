@@ -3,6 +3,7 @@
 @using TGA.Contract.DTOs
 @using TGA.Domain.Enums
 @inject ITelegramAuthService Auth
+@inject ITelegramConnectionCheckService ConnectionCheckService
 @inject IAccountStorageService Accounts
 @inject IChatStorageService ChatStorage
 @inject IContactStorageService ContactStorage
@@ -17,7 +18,10 @@
     <div class="d-flex align-center mb-4">
         <MudText Typo="Typo.h4">Состояние приложения</MudText>
         <MudSpacer />
-        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" Title="обновить"/>
+        <MudTooltip Text="Отправить тестовое сообщение в Telegram (777000 / Избранное). Если сообщение ушло, статус будет подтверждён и сообщение будет удалено автоматически.">
+            <MudIconButton Icon="@Icons.Material.Filled.Send" OnClick="CheckTelegramConnectionAsync" Disabled="@_checkingTelegram" />
+        </MudTooltip>
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="RefreshAsync" />
     </div>
 
     <MudGrid Class="pb-6">
@@ -160,6 +164,7 @@
 @code {
     private List<AccountDto> _accounts = [];
     private bool _loadingAccounts = true;
+    private bool _checkingTelegram;
     private int _activeChatCount;
     private int _activeContactCount;
 
@@ -224,6 +229,26 @@
 
         RefreshLogs();
         _loadingAccounts = false;
+    }
+
+    private async Task CheckTelegramConnectionAsync()
+    {
+        if (_checkingTelegram) return;
+
+        _checkingTelegram = true;
+        try
+        {
+            var ok = await ConnectionCheckService.SendConnectionCheckAsync();
+            if (ok)
+            {
+                await RefreshAsync();
+            }
+        }
+        finally
+        {
+            _checkingTelegram = false;
+            StateHasChanged();
+        }
     }
 
     private void RefreshLogs() => _logs = LogSink.GetRecent().ToList();

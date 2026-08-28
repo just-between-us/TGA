@@ -60,6 +60,7 @@ public static class DependencyInjection
         
         services.AddSingleton<ITelegramAuthService, TelegramAuthService>();
         services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
+        services.AddSingleton<ITelegramConnectionCheckService, TelegramConnectionCheckService>();
         
         services.AddSingleton<IConnectionStatusService, ConnectionStatusService>();
         services.AddSingleton<ITelegramMessageService, TelegramMessageService>();
