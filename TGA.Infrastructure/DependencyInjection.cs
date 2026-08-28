@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TGA.Contract.Abstractions;
@@ -16,10 +17,26 @@ namespace TGA.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddInfrastructure(
+        this IServiceCollection services,
+        IConfiguration config,
+        string? contentRootPath = null)
     {
+        var connectionString = config.GetConnectionString("Default") ?? "Data Source=telegram_assistant.db";
+        if (!string.IsNullOrWhiteSpace(contentRootPath))
+        {
+            var sqlite = new SqliteConnectionStringBuilder(connectionString);
+            if (!string.IsNullOrWhiteSpace(sqlite.DataSource) &&
+                !sqlite.DataSource.Equals(":memory:", StringComparison.OrdinalIgnoreCase) &&
+                !Path.IsPathRooted(sqlite.DataSource))
+            {
+                sqlite.DataSource = Path.Combine(contentRootPath, sqlite.DataSource);
+                connectionString = sqlite.ConnectionString;
+            }
+        }
+
         services.AddDbContextFactory<AppDbContext>(opt =>
-            opt.UseSqlite(config.GetConnectionString("Default") ?? "Data Source=telegram_assistant.db"));
+            opt.UseSqlite(connectionString));
 
         services.AddDataProtection();
 
