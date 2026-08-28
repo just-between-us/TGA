@@ -9,4 +9,6 @@ public interface IMessageStorageService
     Task<List<MessageDto>> GetMessagesByPeerAsync(int accountId, long peerUserId);
     Task ClearAsync(int accountId);
     Task<string> GetExamplesAsync(int accountId, int totalLimit = 200);
+    Task<List<MessageDto>> SearchAsync(
+        int accountId, long? peerUserId, DateTime? from, DateTime? to, string? containsText, int limit);
 }

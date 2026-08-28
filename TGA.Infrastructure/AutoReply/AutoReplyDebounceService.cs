@@ -13,6 +13,8 @@ public class AutoReplyDebounceService(
     IContactProfileStorageService profileStorage,
     IMessageStorageService messageStorage,
     ITriageService triageService,
+    IAgentService agentService,
+    IAgentRunStorageService agentRunStorage,
     IOptions<AutoReplyOptions> options,
     ILogger<AutoReplyDebounceService> logger)
 {
@@ -22,9 +24,15 @@ public class AutoReplyDebounceService(
     {
         if (message.IsOutgoing)
         {
-            // владелец аккаунта уже отвечает сам вручную — автоответ для этого чата больше не нужен
             if (_buffers.TryRemove(message.PeerUserId, out var existing))
                 existing.Cts.Cancel();
+
+            // владелец ответил сам — если агент чего-то ждал по этому чату, снимаем ожидание
+            _ = Task.Run(async () =>
+            {
+                var active = await accountStorage.GetActiveAccountAsync();
+                if (active is not null) await agentRunStorage.CancelAsync(active.Id, message.PeerUserId);
+            });
             return;
         }
 
@@ -74,10 +82,19 @@ public class AutoReplyDebounceService(
             return;
         }
 
+        var pending = buffer.Messages.ToList();
+
+        var activeRun = await agentRunStorage.GetActiveRunAsync(active.Id, peerUserId);
+        if (activeRun is { State: AgentRunState.WaitingClarification })
+        {
+            _buffers.TryRemove(peerUserId, out _);
+            await agentService.ResumeAsync(active.Id, peerUserId, pending, ct);
+            return;
+        }
+
         var history = await messageStorage.GetMessagesByPeerAsync(active.Id, peerUserId);
         var recentHistory = history.OrderBy(m => m.Time).TakeLast(options.Value.HistoryContextSize).ToList();
 
-        var pending = buffer.Messages.ToList();
         var result = await triageService.EvaluateAsync(peerUserId, pending, recentHistory, profile, ct);
 
         logger.LogInformation(
@@ -87,10 +104,8 @@ public class AutoReplyDebounceService(
         switch (result.Action)
         {
             case TriageAction.Reply:
-                
-                // TODO: здесь подключится ReAct-агент и реальная отправка
-                
                 _buffers.TryRemove(peerUserId, out _);
+                await agentService.StartAsync(active.Id, peerUserId, pending, recentHistory, profile, ct);
                 break;
 
             case TriageAction.Wait when buffer.WaitExtensions < options.Value.MaxWaitExtensions:
@@ -98,7 +113,7 @@ public class AutoReplyDebounceService(
                 ScheduleFlush(peerUserId, buffer);
                 break;
 
-            default: // Wait с исчерпанным лимитом или Skip — не зацикливаемся
+            default:
                 _buffers.TryRemove(peerUserId, out _);
                 break;
         }

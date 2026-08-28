@@ -1,4 +1,6 @@
-﻿namespace TGA.Domain.Entities;
+﻿using TGA.Domain.Enums;
+
+namespace TGA.Domain.Entities;
 
 
 public class ContactProfile : Entity
@@ -14,6 +16,7 @@ public class ContactProfile : Entity
     public string? CommunicationStyle { get; set; }
 
     public bool AutoReplyEnabled { get; set; }
+    public AutoReplyMode Mode { get; set; } = AutoReplyMode.Agent;
     public string? AutoReplyInstructions { get; set; }
 
     public DateTime UpdatedAt { get; set; }

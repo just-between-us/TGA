@@ -101,4 +101,19 @@ public class MessageStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
         return records.Select(m => new MessageDto(
             m.TelegramMessageId, m.ContactName, m.Text, m.Time, m.IsOutgoing, m.PeerUserId)).ToList();
     }
+    public async Task<List<MessageDto>> SearchAsync(
+        int accountId, long? peerUserId, DateTime? from, DateTime? to, string? containsText, int limit)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var query = db.Messages.Where(m => m.TelegramAccountId == accountId);
+
+        if (peerUserId is { } pid) query = query.Where(m => m.PeerUserId == pid);
+        if (from is { } f) query = query.Where(m => m.Time >= f);
+        if (to is { } t) query = query.Where(m => m.Time <= t);
+        if (!string.IsNullOrWhiteSpace(containsText)) query = query.Where(m => m.Text.Contains(containsText));
+
+        var results = await query.OrderByDescending(m => m.Time).Take(limit).ToListAsync();
+        return results.Select(m => new MessageDto(
+            m.TelegramMessageId, m.ContactName, m.Text, m.Time, m.IsOutgoing, m.PeerUserId)).ToList();
+    }
 }

@@ -2,6 +2,7 @@
 using TGA.Contract.Abstractions;
 using TGA.Contract.DTOs;
 using TGA.Domain.Entities;
+using TGA.Domain.Enums;
 
 namespace TGA.Infrastructure.Persistence;
 
@@ -25,6 +26,7 @@ public class ContactProfileStorageService(IDbContextFactory<AppDbContext> dbFact
                 profile != null ? profile.CommunicationStyle : null,
                 profile != null && profile.AutoReplyEnabled,
                 profile != null ? profile.AutoReplyInstructions : null,
+                profile != null ? profile.Mode : AutoReplyMode.Agent,
                 profile != null ? profile.UpdatedAt : (DateTime?)null);
 
         return await query.ToListAsync();
@@ -35,11 +37,12 @@ public class ContactProfileStorageService(IDbContextFactory<AppDbContext> dbFact
         var all = await GetAllAsync(accountId); 
         return all.FirstOrDefault(c => c.PeerUserId == peerUserId);
     }
+    
 
     public async Task SaveAsync(
         int accountId, long peerUserId,
         string? notes, string? behaviorProfile, string? communicationStyle,
-        bool autoReplyEnabled, string? autoReplyInstructions)
+        bool autoReplyEnabled, AutoReplyMode mode, string? autoReplyInstructions)
     {
         await using var db = await dbFactory.CreateDbContextAsync();
 
@@ -60,6 +63,7 @@ public class ContactProfileStorageService(IDbContextFactory<AppDbContext> dbFact
         profile.CommunicationStyle = communicationStyle;
         profile.AutoReplyEnabled = autoReplyEnabled;
         profile.AutoReplyInstructions = autoReplyInstructions;
+        profile.Mode = mode;
         profile.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();

@@ -21,6 +21,7 @@ TaskScheduler.UnobservedTaskException += (sender, args) =>
 
 builder.Services.AddMudServices();
 
+builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection("Agent"));
 builder.Services.Configure<AutoReplyOptions>(builder.Configuration.GetSection("AutoReply"));
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.Configure<HistoryLoadOptions>(builder.Configuration.GetSection(HistoryLoadOptions.SectionName));

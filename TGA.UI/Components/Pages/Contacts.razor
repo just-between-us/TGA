@@ -1,6 +1,7 @@
 ﻿@page "/contacts"
 @using TGA.Contract.Abstractions
 @using TGA.Contract.DTOs
+@using TGA.Domain.Enums
 @inject IContactProfileStorageService ProfileStorage
 @inject IContactStorageService ContactStorage
 @inject ITelegramMessageService TelegramSvc
@@ -108,6 +109,17 @@
 
             <MudSwitch @bind-Value="_autoReplyEnabled" Color="Color.Primary" Label="Разрешить автоответ этому контакту" />
 
+            <MudSelect T="AutoReplyMode"
+                       Label="Режим автоответа"
+                       @bind-Value="_autoReplyMode"
+                       Variant="Variant.Outlined"
+                       FullWidth="true"
+                       Class="mt-3"
+                       Disabled="@(!_autoReplyEnabled)">
+                <MudSelectItem Value="AutoReplyMode.Ghost">Призрак</MudSelectItem>
+                <MudSelectItem Value="AutoReplyMode.Agent">Агент</MudSelectItem>
+            </MudSelect>
+            
             <MudTextField @bind-Value="_autoReplyInstructions" Label="Доп. инструкция для автоответа"
                           Lines="3" Variant="Variant.Outlined" Class="mt-3"
                           Disabled="@(!_autoReplyEnabled)"
@@ -136,6 +148,7 @@
     private string _behaviorProfile = string.Empty;
     private string _communicationStyle = string.Empty;
     private bool _autoReplyEnabled;
+    private AutoReplyMode _autoReplyMode;
     private string _autoReplyInstructions = string.Empty;
 
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
@@ -214,6 +227,7 @@
         _communicationStyle = contact.CommunicationStyle ?? string.Empty;
         _autoReplyEnabled = contact.AutoReplyEnabled;
         _autoReplyInstructions = contact.AutoReplyInstructions ?? string.Empty;
+        _autoReplyMode = contact.Mode; 
         _editorVisible = true;
     }
     
@@ -255,7 +269,7 @@
         await ProfileStorage.SaveAsync(
             _accountId, _editing.PeerUserId,
             _notes, _behaviorProfile, _communicationStyle,
-            _autoReplyEnabled, _autoReplyInstructions);
+            _autoReplyEnabled, _autoReplyMode, _autoReplyInstructions);
 
         _editorVisible = false;
         await RefreshAsync();

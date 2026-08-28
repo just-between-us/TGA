@@ -1,4 +1,5 @@
 ﻿using TGA.Contract.DTOs;
+using TGA.Domain.Enums;
 
 namespace TGA.Contract.Abstractions;
 
@@ -14,5 +15,6 @@ public interface IContactProfileStorageService
         string? behaviorProfile,
         string? communicationStyle,
         bool autoReplyEnabled,
+        AutoReplyMode mode,
         string? autoReplyInstructions);
 }

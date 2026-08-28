@@ -1,4 +1,6 @@
-﻿namespace TGA.Contract.DTOs;
+﻿using TGA.Domain.Enums;
+
+namespace TGA.Contract.DTOs;
 
 public record ContactProfileDto(
     long PeerUserId,
@@ -8,4 +10,5 @@ public record ContactProfileDto(
     string? CommunicationStyle,
     bool AutoReplyEnabled,
     string? AutoReplyInstructions,
+    AutoReplyMode Mode,
     DateTime? UpdatedAt);

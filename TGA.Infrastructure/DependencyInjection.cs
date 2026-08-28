@@ -2,6 +2,8 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TGA.Contract.Abstractions;
+using TGA.Infrastructure.Agent;
+using TGA.Infrastructure.Agent.Tools;
 using TGA.Infrastructure.AutoReply;
 using TGA.Infrastructure.Diagnostics;
 using TGA.Infrastructure.Import;
@@ -64,6 +66,12 @@ public static class DependencyInjection
         services.AddSingleton<ITriageService, TriageService>();
         services.AddSingleton<AutoReplyDebounceService>();
         services.AddHostedService<AutoReplySubscriberHostedService>();
+        
+        
+        services.AddSingleton<IAgentRunStorageService, AgentRunStorageService>();
+        services.AddSingleton<IAgentTool, LocalMessageSearchTool>();
+        services.AddSingleton<IAgentTool, RemoteMessageSearchTool>();
+        services.AddSingleton<IAgentService, AgentService>();
 
         return services;
     }
