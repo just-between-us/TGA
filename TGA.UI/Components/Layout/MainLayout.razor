@@ -4,6 +4,7 @@
 @using TGA.Contract.Abstractions
 @using TGA.Contract.DTOs
 @using TGA.Domain.Enums
+@using TGA.UI.Shared.TgaAnimatedBackground
 @using TGA.UI.Shared.TgaLogo
 @inject IConnectionStatusService ConnectionStatus
 @implements IDisposable
@@ -26,8 +27,11 @@
     <MudDrawer id="nav-drawer" @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
         <NavMenu/>
     </MudDrawer>
-    <MudMainContent Class="pt-16 pa-4">
-        @Body
+    <MudMainContent Class="tga-main-content pt-16 pa-4">
+         <TgaAnimatedBackground IsDarkMode="_isDarkMode"/>
+         <div class="tga-main-content-body">
+              @Body
+         </div>
     </MudMainContent>
 </MudLayout>
 

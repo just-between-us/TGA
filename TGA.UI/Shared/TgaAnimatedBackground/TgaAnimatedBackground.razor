@@ -1,0 +1,76 @@
+﻿@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div @ref="_root"
+     class="tga-animated-background"
+     aria-hidden="true">
+
+    <div class="tga-aurora-layer"></div>
+
+    <div class="tga-grid-layer"></div>
+
+    <div class="tga-symbol-field"></div>
+
+    <div class="tga-noise-layer"></div>
+
+    <div class="tga-background-vignette"></div>
+
+</div>
+
+@code {
+
+    [Parameter]
+    public bool IsDarkMode { get; set; }
+
+    private ElementReference _root;
+    private IJSObjectReference? _module;
+
+    private bool _initialized;
+    private bool? _lastTheme;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>(
+                "import",
+                "./Shared/TgaAnimatedBackground/TgaAnimatedBackground.razor.js");
+
+            await _module.InvokeVoidAsync(
+                "initialize",
+                _root,
+                IsDarkMode);
+
+            _initialized = true;
+            _lastTheme = IsDarkMode;
+
+            return;
+        }
+
+        if (_initialized && _lastTheme != IsDarkMode)
+        {
+            await _module!.InvokeVoidAsync(
+                "setTheme",
+                _root,
+                IsDarkMode);
+
+            _lastTheme = IsDarkMode;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null)
+            return;
+
+        try
+        {
+            await _module.InvokeVoidAsync("dispose", _root);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}
