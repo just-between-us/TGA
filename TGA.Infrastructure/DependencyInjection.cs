@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.AddHttpClient("llm");
         services.AddSingleton<ILlmSettingsStorageService, LlmSettingsStorageService>();
         services.AddSingleton<ILlmClient, OpenAiCompatibleLlmClient>();
+        services.AddSingleton<ILlmRoleAssignmentService, LlmRoleAssignmentService>();
         services.AddSingleton<ITriageService, TriageService>();
         services.AddSingleton<AutoReplyDebounceService>();
         services.AddHostedService<AutoReplySubscriberHostedService>();

@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Contact> Contacts => Set<Contact>();
     public DbSet<TelegramAccount> Accounts => Set<TelegramAccount>();
     public DbSet<LlmProviderSettings> LlmProviderSettings => Set<LlmProviderSettings>();
+    public DbSet<LlmRoleAssignment> LlmRoleAssignments => Set<LlmRoleAssignment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

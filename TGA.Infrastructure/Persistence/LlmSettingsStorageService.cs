@@ -37,10 +37,6 @@ public class LlmSettingsStorageService(
         var existing = await db.LlmProviderSettings.FirstOrDefaultAsync(s => s.Name == name);
         var encrypted = encryptor.Encrypt(Encoding.UTF8.GetBytes(apiKey));
 
-        // активным может быть только один профиль — тот же принцип, что у аккаунтов
-        await db.LlmProviderSettings.Where(s => s.IsActive)
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false));
-
         if (existing is not null)
         {
             existing.Provider = provider;
@@ -49,11 +45,12 @@ public class LlmSettingsStorageService(
             existing.Model = model;
             existing.SystemPrompt = systemPrompt;
             existing.Temperature = temperature;
-            existing.IsActive = true;
             existing.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return existing.Id;
         }
+
+        var isFirstProfile = !await db.LlmProviderSettings.AnyAsync();
 
         var entity = new LlmProviderSettings
         {
@@ -64,7 +61,7 @@ public class LlmSettingsStorageService(
             Model = model,
             SystemPrompt = systemPrompt,
             Temperature = temperature,
-            IsActive = true,
+            IsActive = isFirstProfile,
             UpdatedAt = DateTime.UtcNow
         };
         db.LlmProviderSettings.Add(entity);

@@ -64,7 +64,7 @@
 
     <MudPaper Class="pa-4 mb-6" Elevation="2">
         <div class="d-flex align-center mb-3">
-            <MudText Typo="Typo.h6">Аккаунты: @_accounts.Count шт.</MudText>
+            <MudText Typo="Typo.h6">@GetSuffixByAccountCount(_accounts.Count)</MudText>
             <MudSpacer />
             @if (_accounts.Count == 0)
             {
@@ -94,10 +94,10 @@
                             <MudText Typo="Typo.subtitle1">@acc.DisplayName</MudText>
                             @if (acc.IsActive)
                             {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Success">активный</MudChip>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">используется сейчас</MudChip>
                             }
                         </div>
-                        <MudChip T="string" Variant="Variant.Text" Color="Color.Secondary">Id: @acc.Id</MudChip>
+                        <MudChip T="string" Variant="Variant.Text" Color="Color.Primary">ID: @acc.Id</MudChip>
                     </div>
 
                     <MudSimpleTable Dense="true" Class="mt-2">
@@ -266,6 +266,19 @@
     {
         var lastDot = category.LastIndexOf('.');
         return lastDot >= 0 ? category[(lastDot + 1)..] : category;
+    }
+
+    private static string GetSuffixByAccountCount(int count = 0)
+    {
+        switch (count)
+        {
+            case <= 0:
+                return "Аккаунты не найдены";
+            case 1:
+                return "Аккаунт";
+            default:
+                return "Аккаунты";
+        }
     }
 
     public void Dispose()

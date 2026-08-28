@@ -9,7 +9,10 @@ using TGA.Domain.Enums;
 
 namespace TGA.Infrastructure.AutoReply;
 
-public partial class TriageService(ILlmClient llmClient, ILogger<TriageService> logger) : ITriageService
+public partial class TriageService(
+    ILlmClient llmClient,
+    ILlmRoleAssignmentService roleAssignments, 
+    ILogger<TriageService> logger) : ITriageService
 {
     private const string SystemPrompt = """
         Ты — модуль триажа для личного Telegram-автоответчика. Тебе присылают контекст переписки
@@ -32,6 +35,13 @@ public partial class TriageService(ILlmClient llmClient, ILogger<TriageService> 
         ContactProfileDto? profile,
         CancellationToken ct = default)
     {
+        var settings = await roleAssignments.ResolveAsync(LlmUsageRole.Triage);
+        if (settings is null)
+        {
+            logger.LogWarning("Для роли Triage не настроен ни один LLM-провайдер, пропускаю peer={PeerId}", peerUserId);
+            return new TriageResult(TriageAction.Skip, "LLM-провайдер для триажа не настроен");
+        }
+        
         var request = new LlmChatRequest(
             Messages:
             [
@@ -42,7 +52,8 @@ public partial class TriageService(ILlmClient llmClient, ILogger<TriageService> 
 
         try
         {
-            var result = await llmClient.CompleteAsync(request, ct: ct);
+            var result = await llmClient.CompleteAsync(request, settings, ct);
+            logger.LogWarning("Триаж для начался с моделью {settings.Model} - {settings.Name}", settings.Model, settings.Name);
             return ParseResult(result.Content);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

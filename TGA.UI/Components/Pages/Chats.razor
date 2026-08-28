@@ -55,13 +55,13 @@
                                          OnClick="() => SelectChat(chat.PeerUserId)"
                                          Class="@(chat.PeerUserId == _selectedPeerId ? "mud-selected-item" : "")">
                                 <div class="d-flex align-center" style="width: 100%;">
-                                    <MudAvatar Color="Color.Primary" Class="mr-3">
+                                    <MudAvatar Class="mr-3">
                                         @GetInitials(chat.DisplayName)
                                     </MudAvatar>
 
                                     <div style="flex: 1; min-width: 0;">
                                         <div class="d-flex justify-space-between">
-                                            <MudText Typo="Typo.subtitle2" Class="text-truncate">@chat.DisplayName</MudText>
+                                            <MudText Typo="Typo.subtitle2" Style="color: azure" Class="text-truncate">@chat.DisplayName</MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Surface">
                                                 @FormatTime(chat.LastMessageTime)
                                             </MudText>

@@ -4,6 +4,7 @@
 @using TGA.Contract.DTOs.Llm
 @using TGA.Domain.Enums
 @inject ILlmSettingsStorageService SettingsStorage
+@inject ILlmRoleAssignmentService RoleAssignments
 @inject LlmTestService TestService
 @inject ISnackbar Snackbar
 
@@ -13,7 +14,32 @@
 
 <MudGrid>
     <MudItem xs="12" md="6">
-        <MudPaper Class="pa-4" Elevation="2">
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudSelect T="int?" Value="_editingProfileId" ValueChanged="OnProfileSelected"
+                           Label="Профиль" Variant="Variant.Outlined" Class="flex-grow-1">
+                    @foreach (var p in _profiles.OrderBy(p => p.Name))
+                    {
+                        <MudSelectItem T="int?" Value="p.Id">@p.Name @(p.IsActive ? " (по умолчанию)" : "")</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Text" OnClick="NewProfile">Новый</MudButton>
+            </MudStack>
+
+            @if (_editingProfileId is not null)
+            {
+                <MudStack Row="true" Spacing="2" Class="mb-2">
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="MakeActiveAsync">
+                        Сделать профилем по умолчанию
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DeleteAsync">
+                        Удалить
+                    </MudButton>
+                </MudStack>
+            }
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4" Elevation="2">
             <MudStack Spacing="3">
                 <MudTextField @bind-Value="_name" Label="Название профиля" Variant="Variant.Outlined" />
 
@@ -45,11 +71,32 @@
                 </MudButton>
             </MudStack>
         </MudPaper>
+
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-2">Роли</MudText>
+            <MudText Typo="Typo.caption" Class="mb-3">
+                Какой профиль использовать для каждой задачи. "Авто" — текущий профиль по умолчанию.
+            </MudText>
+
+            @foreach (var assignment in _roleAssignments)
+            {
+                <MudSelect T="int?" Value="assignment.ProviderSettingsId"
+                           ValueChanged="v => OnRoleAssignedAsync(assignment.Role, v)"
+                           Label="@RoleLabel(assignment.Role)" Variant="Variant.Outlined" Class="mb-3">
+                    <MudSelectItem T="int?" Value="null">Авто (профиль по умолчанию)</MudSelectItem>
+                    @foreach (var p in _profiles.OrderBy(p => p.Name))
+                    {
+                        <MudSelectItem T="int?" Value="p.Id">@p.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            }
+        </MudPaper>
     </MudItem>
 
     <MudItem xs="12" md="6">
         <MudPaper Class="pa-4 d-flex flex-column" Elevation="2" Style="height: 600px;">
             <MudText Typo="Typo.h6" Class="mb-2">Тестовый чат</MudText>
+            <MudText Typo="Typo.caption" Class="mb-2">Использует текущие (в т.ч. несохранённые) поля слева.</MudText>
 
             <MudStack Spacing="2" Class="flex-grow-1" Style="overflow-y:auto;">
                 @foreach (var msg in _testHistory)
@@ -81,7 +128,11 @@
 </MudGrid>
 
 @code {
-    private string _name = "Default";
+    private List<LlmProviderSettingsDto> _profiles = [];
+    private List<LlmRoleAssignmentDto> _roleAssignments = [];
+    private int? _editingProfileId;
+
+    private string _name = string.Empty;
     private LlmProvider _provider = LlmProvider.OpenRouter;
     private string _baseUrl = "https://openrouter.ai/api/v1";
     private string _apiKey = string.Empty;
@@ -94,18 +145,49 @@
     private string _testInput = string.Empty;
     private bool _sending;
 
-    protected override async Task OnInitializedAsync()
-    {
-        var active = await SettingsStorage.GetActiveAsync();
-        if (active is null) return;
+    protected override async Task OnInitializedAsync() => await ReloadAsync(preferredProfileId: null);
 
-        _name = active.Name;
-        _provider = active.Provider;
-        _baseUrl = active.BaseUrl;
-        _apiKey = active.ApiKey;
-        _model = active.Model;
-        _systemPrompt = active.SystemPrompt;
-        _temperature = active.Temperature;
+    private async Task ReloadAsync(int? preferredProfileId)
+    {
+        _profiles = await SettingsStorage.GetAllAsync();
+        _roleAssignments = await RoleAssignments.GetAllAsync();
+
+        var toLoad = preferredProfileId is { } id
+            ? _profiles.FirstOrDefault(p => p.Id == id)
+            : _profiles.FirstOrDefault(p => p.IsActive) ?? _profiles.FirstOrDefault();
+
+        if (toLoad is not null) LoadProfile(toLoad);
+        else NewProfile();
+    }
+
+    private void LoadProfile(LlmProviderSettingsDto p)
+    {
+        _editingProfileId = p.Id;
+        _name = p.Name;
+        _provider = p.Provider;
+        _baseUrl = p.BaseUrl;
+        _apiKey = p.ApiKey;
+        _model = p.Model;
+        _systemPrompt = p.SystemPrompt;
+        _temperature = p.Temperature;
+    }
+
+    private void NewProfile()
+    {
+        _editingProfileId = null;
+        _name = $"Профиль {_profiles.Count + 1}";
+        _provider = LlmProvider.OpenRouter;
+        _baseUrl = "https://openrouter.ai/api/v1";
+        _apiKey = string.Empty;
+        _model = string.Empty;
+        _systemPrompt = null;
+        _temperature = 0.7;
+    }
+
+    private void OnProfileSelected(int? id)
+    {
+        var profile = _profiles.FirstOrDefault(p => p.Id == id);
+        if (profile is not null) LoadProfile(profile);
     }
 
     private void OnProviderChanged(LlmProvider provider)
@@ -124,8 +206,9 @@
         _saving = true;
         try
         {
-            await SettingsStorage.SaveAsync(_name, _provider, _baseUrl, _apiKey, _model, _systemPrompt, _temperature);
-            Snackbar.Add("Настройки сохранены", Severity.Success);
+            var savedId = await SettingsStorage.SaveAsync(_name, _provider, _baseUrl, _apiKey, _model, _systemPrompt, _temperature);
+            Snackbar.Add("Профиль сохранён", Severity.Success);
+            await ReloadAsync(savedId);
         }
         catch (Exception ex)
         {
@@ -136,6 +219,40 @@
             _saving = false;
         }
     }
+
+    private async Task MakeActiveAsync()
+    {
+        if (_editingProfileId is not { } id) return;
+        await SettingsStorage.SetActiveAsync(id);
+        Snackbar.Add("Профиль по умолчанию обновлён", Severity.Success);
+        await ReloadAsync(id);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_editingProfileId is not { } id) return;
+        await SettingsStorage.DeleteAsync(id);
+        Snackbar.Add("Профиль удалён", Severity.Info);
+        await ReloadAsync(null); // назначения ролей на удалённый профиль откатятся на "авто" через SetNull в БД
+    }
+
+    private async Task OnRoleAssignedAsync(LlmUsageRole role, int? providerSettingsId)
+    {
+        if (providerSettingsId is { } id)
+            await RoleAssignments.AssignAsync(role, id);
+        else
+            await RoleAssignments.ClearAsync(role);
+
+        _roleAssignments = await RoleAssignments.GetAllAsync();
+        Snackbar.Add("Назначение роли обновлено", Severity.Success);
+    }
+
+    private static string RoleLabel(LlmUsageRole role) => role switch
+    {
+        LlmUsageRole.Triage => "Триаж",
+        LlmUsageRole.Agent => "Агент",
+        _ => role.ToString()
+    };
 
     private async Task SendTestMessageAsync()
     {
