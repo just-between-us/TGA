@@ -167,7 +167,9 @@
     private bool _checkingTelegram;
     private int _activeChatCount;
     private int _activeContactCount;
-
+    
+    private bool _disposed = false;
+    
     private List<LogEntryDto> _logs = [];
     private string _logFilter = string.Empty;
     private bool _autoRefresh = true;
@@ -186,54 +188,79 @@
         ConnectionStatus.StateChanged += OnStateChanged;
 
         await RefreshAsync();
-
+        
+        
         _refreshTimer = new System.Timers.Timer(2000);
         _refreshTimer.Elapsed += async (_, _) =>
         {
-            if (!_autoRefresh) return;
-            await InvokeAsync(async () =>
+            if (_disposed || !_autoRefresh) return;
+
+            try
             {
-                RefreshLogs();
-                StateHasChanged();
-            });
+                if (!_autoRefresh) return;
+                await InvokeAsync(async () =>
+                {
+                    RefreshLogs();
+                    StateHasChanged();
+                });
+            }
+            catch (ObjectDisposedException)
+            { }
         };
         _refreshTimer.Start();
     }
 
     private void OnStateChanged() => InvokeAsync(async () =>
     {
-        await RefreshAsync();
-        StateHasChanged();
+        if (_disposed) return;
+        try
+        {
+            await RefreshAsync();
+            StateHasChanged();
+        }
+        catch (ObjectDisposedException)
+        { }
     });
 
     private async Task RefreshAsync()
     {
-        _loadingAccounts = true;
-        StateHasChanged();
+        if (_disposed) return;
 
-        _accounts = await Accounts.GetAllAccountsAsync();
-
-        var active = _accounts.FirstOrDefault(a => a.IsActive);
-        if (active is not null)
+        try
         {
-            var chats = await ChatStorage.GetChatSummariesAsync(active.Id);
-            var contacts = await ContactStorage.GetAllAsync(active.Id);
-            _activeChatCount = chats.Count;
-            _activeContactCount = contacts.Count;
-        }
-        else
-        {
-            _activeChatCount = 0;
-            _activeContactCount = 0;
-        }
+            _loadingAccounts = true;
+            StateHasChanged();
 
-        RefreshLogs();
-        _loadingAccounts = false;
+            _accounts = await Accounts.GetAllAccountsAsync();
+
+            var active = _accounts.FirstOrDefault(a => a.IsActive);
+            if (active is not null)
+            {
+                var chats = await ChatStorage.GetChatSummariesAsync(active.Id);
+                var contacts = await ContactStorage.GetAllAsync(active.Id);
+                _activeChatCount = chats.Count;
+                _activeContactCount = contacts.Count;
+            }
+            else
+            {
+                _activeChatCount = 0;
+                _activeContactCount = 0;
+            }
+
+            RefreshLogs();
+            _loadingAccounts = false;
+            StateHasChanged();
+        }
+        catch (ObjectDisposedException)
+        {
+            _loadingAccounts = false; 
+        }
     }
 
     private async Task CheckTelegramConnectionAsync()
     {
-        if (_checkingTelegram) return;
+        if (_checkingTelegram || _disposed) return;
+        
 
         _checkingTelegram = true;
         try
@@ -244,10 +271,15 @@
                 await RefreshAsync();
             }
         }
+        catch (ObjectDisposedException)
+        { }
         finally
         {
-            _checkingTelegram = false;
-            StateHasChanged();
+            if (!_disposed)
+            {
+                _checkingTelegram = false;
+                StateHasChanged();
+            }
         }
     }
 
@@ -257,8 +289,10 @@
 
     private void ClearLogs()
     {
+        if (_disposed) return;
         LogSink.Clear();
         _logs.Clear();
+        StateHasChanged();
     }
 
     private string StatusIcon => ConnectionStatus.State switch
@@ -308,6 +342,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         Auth.StateChanged -= OnStateChanged;
         ConnectionStatus.StateChanged -= OnStateChanged;
         _refreshTimer?.Stop();

@@ -11,7 +11,7 @@ public class RuntimeSettingsStorageService(IDbContextFactory<AppDbContext> dbFac
     {
         await using var db = await dbFactory.CreateDbContextAsync();
 
-        var entity = await db.RuntimeSettings.FirstOrDefaultAsync();
+        var entity = await db.RuntimeSettings.OrderBy(x => x.Id).FirstOrDefaultAsync();
         if (entity is null)
         {
             entity = new Domain.Entities.RuntimeSettings { UpdatedAt = DateTime.UtcNow };
@@ -28,7 +28,7 @@ public class RuntimeSettingsStorageService(IDbContextFactory<AppDbContext> dbFac
     {
         await using var db = await dbFactory.CreateDbContextAsync();
 
-        var entity = await db.RuntimeSettings.FirstOrDefaultAsync();
+        var entity = await db.RuntimeSettings.OrderBy(x => x.Id).FirstOrDefaultAsync();
         if (entity is null)
         {
             entity = new Domain.Entities.RuntimeSettings();
