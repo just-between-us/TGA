@@ -16,10 +16,11 @@
 <MudLayout>
     <MudAppBar Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())"/>
-        <TgaLogo />
-        <MudChip Icon="@StatusIcon" Class="mx-8" Variant="Variant.Text" Color="StatusColor" T="string">
+        <MudChip Icon="@StatusIcon" Variant="Variant.Text" Color="StatusColor" T="string">
             @StatusLabel
         </MudChip>
+        <MudSpacer/>
+        <TgaLogo />
         <MudSpacer/>
         <MudIconButton Icon="@(DarkLightModeButtonIcon)" Color="Color.Inherit" OnClick="@DarkModeToggle"/>
         <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Inherit" Edge="Edge.End"/>

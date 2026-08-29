@@ -125,7 +125,7 @@ public class AgentService(
         }
 
         logger.LogWarning("Агент для peer={PeerId} исчерпал лимит итераций без финального ответа", peerUserId);
-        await telegramMessageService.SendMessageAsync(peerUserId, "Не смог разобраться с этим, давай вернёмся к этому позже.");
+        await telegramMessageService.SendMessageAsync(peerUserId, "Не смог разобраться с этим, давай вернёмся к этому позже."); //TODO: fallback -> в настройки
         await runStorage.MarkFailedAsync(accountId, peerUserId);
     }
 

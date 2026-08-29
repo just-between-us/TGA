@@ -16,7 +16,6 @@ public class TelegramMessageService(
     TelegramContactResolver contactResolver,
     TelegramDialogSyncService dialogSyncService,
     TelegramContactSyncService contactSyncService,
-    IConnectionStatusService connectionStatus,
     ILogger<TelegramMessageService> logger) : ITelegramMessageService
 {
     public event Action<MessageDto>? OnNewMessageReceived;
@@ -172,60 +171,15 @@ public class TelegramMessageService(
             message.Date.ToLocalTime(), isOutgoing, peerUser.user_id);
     }
 
-    internal static async Task TryDeleteSentMessageAsync(Client client, InputPeer peer, int messageId)
+    internal static async Task TryDeleteSentMessageAsync(Client client, int messageId)
     {
-        var methods = typeof(Client)
-            .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)
-            .Where(m => m.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase) || m.Name.Contains("Messages", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(m => m.Name)
-            .ToList();
-
-        foreach (var method in methods)
+        try
         {
-            var parameters = method.GetParameters();
-            if (parameters.Length == 0) continue;
-
-            try
-            {
-                object?[] args = Array.Empty<object?>();
-
-                if (parameters.Length == 1)
-                {
-                    var paramType = parameters[0].ParameterType;
-                    if (paramType == typeof(int[]))
-                        args = [new[] { messageId }];
-                    else if (paramType == typeof(long[]))
-                        args = [new long[] { messageId }];
-                    else if (paramType == typeof(List<int>))
-                        args = [new List<int> { messageId }];
-                    else if (paramType == typeof(InputPeer))
-                        args = [peer];
-                }
-                else if (parameters.Length == 2)
-                {
-                    if (parameters[0].ParameterType == typeof(InputPeer) && parameters[1].ParameterType == typeof(int[]))
-                        args = [peer, new[] { messageId }];
-                    else if (parameters[0].ParameterType == typeof(InputPeer) && parameters[1].ParameterType == typeof(long[]))
-                        args = [peer, new long[] { messageId }];
-                    else if (parameters[0].ParameterType == typeof(int[]) && parameters[1].ParameterType == typeof(InputPeer))
-                        args = [new[] { messageId }, peer];
-                    else if (parameters[0].ParameterType == typeof(long[]) && parameters[1].ParameterType == typeof(InputPeer))
-                        args = [new long[] { messageId }, peer];
-                }
-
-                if (args.Length == 0) continue;
-
-                var result = method.Invoke(client, args);
-                if (result is Task task)
-                {
-                    await task;
-                }
-                return;
-            }
-            catch
-            {
-                // Пробуем следующий вариант сигнатуры, чтобы не ломать проверку соединения.
-            }
+            await client.Messages_DeleteMessages([messageId], revoke: true);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Не удалось удалить тестовое сообщение: {ex.Message}");
         }
     }
 

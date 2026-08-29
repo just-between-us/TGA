@@ -15,7 +15,7 @@ public class TelegramConnectionCheckService(
     public async Task<bool> SendConnectionCheckAsync()
     {
         var active = await accountStorage.GetActiveAccountAsync()
-            ?? throw new InvalidOperationException("Нет активного аккаунта");
+                     ?? throw new InvalidOperationException("Нет активного аккаунта");
 
         var client = clientFactory.GetCurrent();
         const long peerUserId = 777000L;
@@ -27,13 +27,10 @@ public class TelegramConnectionCheckService(
         {
             var peer = await peerResolver.ResolveInputPeerAsync(client, peerUserId);
             var sent = await client.SendMessageAsync(peer, payload);
-            if (sent is null)
-            {
-                connectionStatus.SetDisconnected();
-                return false;
-            }
 
-            await TelegramMessageService.TryDeleteSentMessageAsync(client, peer, sent.id);
+            logger.LogInformation("Проверка Telegram-соединения прошла успешно");
+
+            await TelegramMessageService.TryDeleteSentMessageAsync(client, sent.id);
             connectionStatus.SetConnected(active.DisplayName);
             return true;
         }
