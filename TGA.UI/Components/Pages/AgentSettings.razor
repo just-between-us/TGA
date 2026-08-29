@@ -1,0 +1,83 @@
+﻿@page "/agent-settings"
+@using TGA.Contract.Abstractions
+@inject IRuntimeSettingsStorageService SettingsStorage
+@inject ISnackbar Snackbar
+
+<PageTitle>Настройки автоответчика</PageTitle>
+
+<MudText Typo="Typo.h5" Class="mb-4">Настройки автоответчика</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">Буфер и триаж</MudText>
+            <MudStack Spacing="4">
+                <MudNumericField @bind-Value="_debounceSeconds" Label="Пауза перед реакцией (сек)"
+                                  Variant="Variant.Outlined" Min="1" Max="120" />
+                <MudNumericField @bind-Value="_maxWaitExtensions" Label="Макс. продлений ожидания (Wait)"
+                                  Variant="Variant.Outlined" Min="0" Max="20" />
+                <MudNumericField @bind-Value="_historyContextSize" Label="Сообщений истории в контексте"
+                                  Variant="Variant.Outlined" Min="1" Max="100" />
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="pa-4" Elevation="2">
+            <MudText Typo="Typo.h6" Class="mb-3">ReAct-агент</MudText>
+            <MudStack Spacing="4">
+                <MudNumericField @bind-Value="_maxClarifications" Label="Макс. уточняющих вопросов подряд"
+                                  Variant="Variant.Outlined" Min="0" Max="10" />
+                <MudNumericField @bind-Value="_maxToolIterations" Label="Макс. итераций tool-calling за один запуск"
+                                  Variant="Variant.Outlined" Min="1" Max="30" />
+                <MudNumericField @bind-Value="_ghostStyleExampleCount" Label="Примеров стиля для режима 'Призрак'"
+                                  Variant="Variant.Outlined" Min="0" Max="50" />
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveAsync" Disabled="_saving">
+    Сохранить
+</MudButton>
+
+@code {
+    private int _debounceSeconds;
+    private int _maxWaitExtensions;
+    private int _historyContextSize;
+    private int _maxClarifications;
+    private int _maxToolIterations;
+    private int _ghostStyleExampleCount;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var s = await SettingsStorage.GetAsync();
+        _debounceSeconds = s.DebounceSeconds;
+        _maxWaitExtensions = s.MaxWaitExtensions;
+        _historyContextSize = s.HistoryContextSize;
+        _maxClarifications = s.MaxClarifications;
+        _maxToolIterations = s.MaxToolIterations;
+        _ghostStyleExampleCount = s.GhostStyleExampleCount;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await SettingsStorage.SaveAsync(
+                _debounceSeconds, _maxWaitExtensions, _historyContextSize,
+                _maxClarifications, _maxToolIterations, _ghostStyleExampleCount);
+            Snackbar.Add("Настройки сохранены, применятся к следующему сообщению", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка сохранения: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

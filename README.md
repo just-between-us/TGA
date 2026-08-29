@@ -33,18 +33,6 @@
     "DefaultMessagesPerDialog": 20,
     "MaxMessagesPerDialog": 100
   },
-  
-  "AutoReply": {
-    "DebounceSeconds": 7,
-    "MaxWaitExtensions": 3,
-    "HistoryContextSize": 15
-  },
-  
-  "Agent": {
-    "MaxClarifications": 2,
-    "MaxToolIterations": 6,
-    "GhostStyleExampleCount": 12
-  }
 }
 
 ```

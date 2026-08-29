@@ -17,7 +17,7 @@ public class AgentService(
     IEnumerable<IAgentTool> tools,
     ITelegramMessageService telegramMessageService,
     IMessageStorageService messageStorage,
-    IOptions<AgentOptions> options,
+    IRuntimeSettingsStorageService settingsStorage,
     ILogger<AgentService> logger) : IAgentService
 {
     private const string AskClarifyingToolName = "ask_clarifying_question";
@@ -26,15 +26,17 @@ public class AgentService(
         int accountId, long peerUserId, IReadOnlyList<MessageDto> triggerMessages,
         IReadOnlyList<MessageDto> recentHistory, ContactProfileDto profile, CancellationToken ct = default)
     {
-        var systemPrompt = await BuildSystemPromptAsync(accountId, profile, ct);
+        var settings = await settingsStorage.GetAsync();
+        var systemPrompt = await BuildSystemPromptAsync(accountId, profile, settings, ct);
 
         var messages = new List<LlmChatMessage>
         {
             new(LlmRole.System, systemPrompt),
             new(LlmRole.User, BuildInitialUserPrompt(triggerMessages, recentHistory, profile))
         };
+        
 
-        await RunLoopAsync(accountId, peerUserId, messages, clarificationCount: 0, profile.Mode, ct);
+        await RunLoopAsync(accountId, peerUserId, messages, clarificationCount: 0, profile.Mode, settings, ct);
     }
 
     public async Task ResumeAsync(
@@ -47,34 +49,36 @@ public class AgentService(
             return;
         }
 
+        var settings = await settingsStorage.GetAsync();
+        
         var messages = new List<LlmChatMessage>(run.Messages)
         {
             new(LlmRole.User, string.Join("\n", newMessages.Select(m => m.Text)))
         };
 
-        await RunLoopAsync(accountId, peerUserId, messages, run.ClarificationCount, run.Mode, ct);
+        await RunLoopAsync(accountId, peerUserId, messages, run.ClarificationCount, run.Mode, settings, ct);
     }
 
     private async Task RunLoopAsync(
         int accountId, long peerUserId, List<LlmChatMessage> messages,
-        int clarificationCount, AutoReplyMode mode, CancellationToken ct)
+        int clarificationCount, AutoReplyMode mode, RuntimeSettingsDto settings, CancellationToken ct)
     {
-        var settings = await roleAssignments.ResolveAsync(LlmUsageRole.Agent);
-        if (settings is null)
+        var llmSettings = await roleAssignments.ResolveAsync(LlmUsageRole.Agent);
+        if (llmSettings is null)
         {
             logger.LogWarning("Для роли Agent не настроен LLM-провайдер, peer={PeerId}", peerUserId);
             return;
         }
 
-        for (var iteration = 0; iteration < options.Value.MaxToolIterations; iteration++)
+        for (var iteration = 0; iteration < settings.MaxToolIterations; iteration++)
         {
-            var toolDefs = BuildToolDefinitions(clarificationCount >= options.Value.MaxClarifications);
-            var request = new LlmChatRequest(messages, settings.Model, settings.Temperature, Tools: toolDefs);
+            var toolDefs = BuildToolDefinitions(clarificationCount >= settings.MaxClarifications);
+            var request = new LlmChatRequest(messages, llmSettings.Model, llmSettings.Temperature, Tools: toolDefs);
 
             LlmChatResult result;
             try
             {
-                result = await llmClient.CompleteAsync(request, settings, ct);
+                result = await llmClient.CompleteAsync(request, llmSettings, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -83,10 +87,10 @@ public class AgentService(
                 return;
             }
 
-            // финальный текстовый ответ — модель не вызвала ни одного инструмента
+            // финальный текстовый ответ —> (модель не вызвала ни одного инструмента)
             if (result.ToolCalls is not { Count: > 0 })
             {
-                await telegramMessageService.SendMessageAsync(peerUserId, result.Content ?? "Не знаю, что ответить.");
+                await telegramMessageService.SendMessageAsync(peerUserId, result.Content ?? "Не знаю, что ответить."); //TODO: финальный fallback (llm не смогла ответить) -> в настройки
                 await runStorage.MarkCompletedAsync(accountId, peerUserId);
                 return;
             }
@@ -125,7 +129,7 @@ public class AgentService(
         }
 
         logger.LogWarning("Агент для peer={PeerId} исчерпал лимит итераций без финального ответа", peerUserId);
-        await telegramMessageService.SendMessageAsync(peerUserId, "Не смог разобраться с этим, давай вернёмся к этому позже."); //TODO: fallback -> в настройки
+        await telegramMessageService.SendMessageAsync(peerUserId, "Не смог разобраться с этим, давай вернёмся к этому позже."); //TODO: лимитный fallback -> в настройки
         await runStorage.MarkFailedAsync(accountId, peerUserId);
     }
 
@@ -148,10 +152,10 @@ public class AgentService(
     private static string ExtractClarifyingQuestion(string argsJson)
     {
         using var doc = JsonDocument.Parse(argsJson);
-        return doc.RootElement.TryGetProperty("question", out var q) ? q.GetString() ?? "Уточни, пожалуйста." : "Уточни, пожалуйста.";
+        return doc.RootElement.TryGetProperty("question", out var q) ? q.GetString() ?? "Уточни, пожалуйста." : "Уточни, пожалуйста."; //TODO: если вопрос был вызван, но без текста fallback -> в настройки
     }
 
-    private async Task<string> BuildSystemPromptAsync(int accountId, ContactProfileDto profile, CancellationToken ct)
+    private async Task<string> BuildSystemPromptAsync(int accountId, ContactProfileDto profile, RuntimeSettingsDto settings, CancellationToken ct)
     {
         var sb = new StringBuilder();
 
@@ -163,18 +167,19 @@ public class AgentService(
                 Если не хватает информации — задай уточняющий вопрос так, как задал бы сам пользователь: коротко,
                 неформально, без канцелярита. Если данных всё ещё не хватает после уточнений — ответь в духе
                 "не понял, объясни нормально", не выдумывай.
-                """);
+                """); //TODO: системный промпт для призрака -> в настройки
 
             var ownMessages = await messageStorage.SearchAsync(
                 accountId, peerUserId: null, from: null, to: null, containsText: null,
-                limit: options.Value.GhostStyleExampleCount * 3); // с запасом, дальше отфильтруем только исходящие
-            var examples = ownMessages.Where(m => m.IsOutgoing).Select(m => m.Text)
-                .Take(options.Value.GhostStyleExampleCount).ToList();
+                limit: settings.GhostStyleExampleCount * 3); // с запасом, дальше отфильтруем только исходящие //TODO: объём контекстных сообщений для few-shot -> в настройки
+            
+            var examples = ownMessages.Where(m => m.IsOutgoing).Select(m => m.Text) //TODO: few-shot (12) -> в настройки
+                .Take(settings.GhostStyleExampleCount).ToList();
 
             if (examples.Count > 0)
             {
                 sb.AppendLine("Примеры реальных сообщений пользователя (ориентируйся на их стиль):");
-                foreach (var ex in examples) sb.AppendLine($"- {ex}");
+                foreach (var ex in examples) sb.AppendLine($"- {ex}"); 
             }
         }
         else
@@ -184,7 +189,7 @@ public class AgentService(
                 Отвечай по существу, вежливо и по делу. Если не хватает информации — задай уточняющий вопрос.
                 Если данных всё ещё не хватает после уточнений — честно скажи, что не можешь ответить, и предложи
                 переформулировать вопрос или дождаться самого пользователя.
-                """);
+                """); //TODO: системный промпт для агента -> в настройки
         }
 
         sb.AppendLine();

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using TGA.Application;
+using TGA.Contract.Abstractions;
 using TGA.Contract.Options;
 using TGA.Infrastructure;
 using TGA.Infrastructure.Diagnostics;
@@ -21,8 +22,8 @@ TaskScheduler.UnobservedTaskException += (sender, args) =>
 
 builder.Services.AddMudServices();
 
-builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.SectionName));
-builder.Services.Configure<AutoReplyOptions>(builder.Configuration.GetSection(AutoReplyOptions.SectionName));
+builder.Services.AddSingleton<IRuntimeSettingsStorageService, RuntimeSettingsStorageService>();
+
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 builder.Services.Configure<HistoryLoadOptions>(builder.Configuration.GetSection(HistoryLoadOptions.SectionName));
 

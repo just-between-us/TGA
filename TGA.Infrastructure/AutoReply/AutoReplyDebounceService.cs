@@ -15,7 +15,7 @@ public class AutoReplyDebounceService(
     ITriageService triageService,
     IAgentService agentService,
     IAgentRunStorageService agentRunStorage,
-    IOptions<AutoReplyOptions> options,
+    IRuntimeSettingsStorageService settingsStorage, 
     ILogger<AutoReplyDebounceService> logger)
 {
     private readonly ConcurrentDictionary<long, PendingBuffer> _buffers = new();
@@ -58,7 +58,8 @@ public class AutoReplyDebounceService(
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(options.Value.DebounceSeconds), cts.Token);
+                var settings = await settingsStorage.GetAsync();
+                await Task.Delay(TimeSpan.FromSeconds(settings.DebounceSeconds), cts.Token);
                 await FlushAsync(peerUserId, cts.Token);
             }
             catch (OperationCanceledException)
@@ -91,9 +92,11 @@ public class AutoReplyDebounceService(
             await agentService.ResumeAsync(active.Id, peerUserId, pending, ct);
             return;
         }
+        
+        var settings = await settingsStorage.GetAsync();
 
         var history = await messageStorage.GetMessagesByPeerAsync(active.Id, peerUserId);
-        var recentHistory = history.OrderBy(m => m.Time).TakeLast(options.Value.HistoryContextSize).ToList();
+        var recentHistory = history.OrderBy(m => m.Time).TakeLast(settings.HistoryContextSize).ToList();
 
         var result = await triageService.EvaluateAsync(peerUserId, pending, recentHistory, profile, ct);
 
@@ -108,7 +111,7 @@ public class AutoReplyDebounceService(
                 await agentService.StartAsync(active.Id, peerUserId, pending, recentHistory, profile, ct);
                 break;
 
-            case TriageAction.Wait when buffer.WaitExtensions < options.Value.MaxWaitExtensions:
+            case TriageAction.Wait when buffer.WaitExtensions < settings.MaxWaitExtensions:
                 buffer.WaitExtensions++;
                 ScheduleFlush(peerUserId, buffer);
                 break;
