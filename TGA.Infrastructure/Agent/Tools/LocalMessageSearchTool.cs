@@ -1,9 +1,10 @@
 ﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using TGA.Contract.Abstractions;
 
 namespace TGA.Infrastructure.Agent.Tools;
 
-public class LocalMessageSearchTool(IMessageStorageService storage) : IAgentTool
+public class LocalMessageSearchTool(IMessageStorageService storage, ILogger<LocalMessageSearchTool> logger) : IAgentTool
 {
     public string Name => "search_local_messages";
     public string Description =>
@@ -38,6 +39,8 @@ public class LocalMessageSearchTool(IMessageStorageService storage) : IAgentTool
 
         if (results.Count == 0) return "Ничего не найдено в локальной истории.";
 
+        logger.LogInformation("Агент вызвал инструмент поиска по локальной истории сообщений, результатов: {results.Count}", results.Count);
+        
         return string.Join("\n", results.Select(m =>
             $"[{m.Time:yyyy-MM-dd HH:mm}] {(m.IsOutgoing ? "Я" : m.ContactName)}: {m.Text}"));
     }

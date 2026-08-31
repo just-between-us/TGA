@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using TGA.Contract.Abstractions;
 using TGA.Contract.DTOs;
 using TGA.Infrastructure.Telegram;
@@ -11,6 +12,7 @@ public class RemoteMessageSearchTool(
     TelegramPeerResolver peerResolver,
     IAccountStorageService accountStorage,
     IMessageStorageService messageStorage,
+    ILogger<RemoteMessageSearchTool> logger,
     TelegramContactResolver contactResolver) : IAgentTool
 {
     public string Name => "search_telegram_remote";
@@ -53,6 +55,9 @@ public class RemoteMessageSearchTool(
             var dto = new MessageDto(message.id, contactName, text, message.Date.ToLocalTime(), isOutgoing, peerUser.user_id);
             await messageStorage.AddMessageAsync(dto, active.Id); // дедуп по (ChatId, TelegramMessageId), как и в остальном коде
             imported.Add($"[{dto.Time:yyyy-MM-dd HH:mm}] {(dto.IsOutgoing ? "Я" : dto.ContactName)}: {dto.Text}");
+            
+            
+            logger.LogInformation("Агент вызвал инструмент поиска истории сообщений Telegram, результатов: {imported.Count}", imported.Count);
         }
 
         return imported.Count == 0

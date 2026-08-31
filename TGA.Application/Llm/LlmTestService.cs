@@ -28,7 +28,7 @@ public class LlmTestService(
         var request = new LlmChatRequest(messages, settings.Model, settings.Temperature);
         var result = await llmClient.CompleteAsync(request, settings, ct);
 
-        logger.LogInformation("Пришёл ответ: {result}", Truncate(result));
+        logger.LogInformation("Пришёл ответ: {result}", Truncate(result, 60));
         
         return result.Content ?? "(пустой ответ)";
     }

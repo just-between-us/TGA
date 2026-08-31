@@ -29,11 +29,16 @@ public class AgentService(
         var settings = await settingsStorage.GetAsync();
         var systemPrompt = await BuildSystemPromptAsync(accountId, profile, settings, ct);
 
+        logger.LogInformation("Агент взял в работу: {AgentTask}", recentHistory.OrderByDescending(x => x.Time).FirstOrDefault());
+        logger.LogInformation("Системный промпт: {systemPrompt}", systemPrompt);
+        
         var messages = new List<LlmChatMessage>
         {
             new(LlmRole.System, systemPrompt),
             new(LlmRole.User, BuildInitialUserPrompt(triggerMessages, recentHistory, profile))
         };
+        
+        logger.LogInformation("Сообщений для контекста: {messages}", messages.Count);
         
 
         await RunLoopAsync(accountId, peerUserId, messages, clarificationCount: 0, profile.Mode, settings, ct);
@@ -75,7 +80,10 @@ public class AgentService(
             var toolDefs = BuildToolDefinitions(clarificationCount >= settings.MaxClarifications);
             var request = new LlmChatRequest(messages, llmSettings.Model, llmSettings.Temperature, Tools: toolDefs);
 
+            logger.LogInformation("Запускаю {iteration} итерацию агентного цикла", iteration++);
+            
             LlmChatResult result;
+            
             try
             {
                 result = await llmClient.CompleteAsync(request, llmSettings, ct);
@@ -91,6 +99,9 @@ public class AgentService(
             if (result.ToolCalls is not { Count: > 0 })
             {
                 await telegramMessageService.SendMessageAsync(peerUserId, result.Content ?? "Не знаю, что ответить."); //TODO: финальный fallback (llm не смогла ответить) -> в настройки
+                
+                logger.LogInformation("(Агент решил не вызывать инструмент) Ответил {peerUserId}: {result.Content}", peerUserId, result.Content);
+                
                 await runStorage.MarkCompletedAsync(accountId, peerUserId);
                 return;
             }
@@ -122,6 +133,8 @@ public class AgentService(
                 var question = ExtractClarifyingQuestion(askClarify.ArgumentsJson);
                 await telegramMessageService.SendMessageAsync(peerUserId, question);
 
+                logger.LogInformation("Задаю уточняющий вопрос: {question}", question);
+                
                 clarificationCount++;
                 await runStorage.UpsertAsync(accountId, peerUserId, AgentRunState.WaitingClarification, clarificationCount, messages, mode);
                 return; // ждём ответ пользователя — продолжится через ResumeAsync
@@ -129,6 +142,7 @@ public class AgentService(
         }
 
         logger.LogWarning("Агент для peer={PeerId} исчерпал лимит итераций без финального ответа", peerUserId);
+        
         await telegramMessageService.SendMessageAsync(peerUserId, "Не смог разобраться с этим, давай вернёмся к этому позже."); //TODO: лимитный fallback -> в настройки
         await runStorage.MarkFailedAsync(accountId, peerUserId);
     }
@@ -163,7 +177,7 @@ public class AgentService(
         {
             sb.AppendLine("""
                 Ты отвечаешь ВМЕСТО пользователя, максимально имитируя его собственный стиль письма: длину сообщений,
-                пунктуацию, обороты речи, эмодзи (если он их использует). Никогда не представляйся ассистентом.
+                пунктуацию, обороты речи. Никогда не представляйся ассистентом.
                 Если не хватает информации — задай уточняющий вопрос так, как задал бы сам пользователь: коротко,
                 неформально, без канцелярита. Если данных всё ещё не хватает после уточнений — ответь в духе
                 "не понял, объясни нормально", не выдумывай.
