@@ -116,6 +116,24 @@ public class ChatStorageService(IDbContextFactory<AppDbContext> dbFactory) : ICh
         var all = await GetChatSummariesAsync(accountId);
         return all.FirstOrDefault(c => c.PeerUserId == peerId);
     }
+
+    public async Task DeleteAsync(int accountId, long peerId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var chat = await db.Chats.FirstOrDefaultAsync(c =>
+            c.TelegramAccountId == accountId && c.PeerId == peerId);
+
+        if (chat is null) return;
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.Messages.Where(m => m.ChatId == chat.Id).ExecuteDeleteAsync();
+        await db.AgentRuns
+            .Where(r => r.TelegramAccountId == accountId && r.PeerUserId == peerId)
+            .ExecuteDeleteAsync();
+        await db.Chats.Where(c => c.Id == chat.Id).ExecuteDeleteAsync();
+        await transaction.CommitAsync();
+    }
     
     public async Task<int> UpsertDialogAsync(
         int accountId, long peerId, long? topMessageId,

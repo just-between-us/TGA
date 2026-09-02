@@ -83,8 +83,37 @@
                     @(context.UpdatedAt?.ToString("dd.MM.yy HH:mm") ?? "—")
                 </MudTd>
                 <MudTd>
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
-                                   OnClick="@(() => OpenEditor(context))" />
+                    <MudTooltip Text="Редактировать контакт">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                       OnClick="@(() => OpenEditor(context))" />
+                    </MudTooltip>
+                    <div style="position: relative; display: inline-block;">
+                        <MudTooltip Text="Удалить контакт и локальную историю">
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => RequestDelete(context))" />
+                        </MudTooltip>
+                        @if (_deleteCandidate?.PeerUserId == context.PeerUserId)
+                        {
+                            <MudPaper Elevation="8" Class="pa-3"
+                                      Style="position: absolute; right: 0; z-index: 20;">
+                                <MudText Typo="Typo.body2" Class="mb-2">
+                                    Удалить «@context.DisplayName» и локальную историю?
+                                </MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
+                                    Профиль и сообщения в Telegram не будут удалены.
+                                </MudText>
+                                <div class="d-flex justify-end" style="gap: 8px;">
+                                    <MudButton Size="Size.Small" OnClick="CancelDelete">Отмена</MudButton>
+                                    <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled"
+                                               StartIcon="@Icons.Material.Filled.DeleteOutline"
+                                               OnClick="@(() => DeleteContactAsync(context))">
+                                        Удалить
+                                    </MudButton>
+                                </div>
+                            </MudPaper>
+                        }
+                    </div>
                 </MudTd>
             </RowTemplate>
         </MudTable>
@@ -171,6 +200,7 @@
     private bool _autoReplyEnabled;
     private AutoReplyMode _autoReplyMode;
     private string _autoReplyInstructions = string.Empty;
+    private ContactProfileDto? _deleteCandidate;
 
     private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
 
@@ -291,6 +321,19 @@
             _resolvingName = false;
             StateHasChanged();
         }
+    }
+
+    private void RequestDelete(ContactProfileDto contact) => _deleteCandidate = contact;
+
+    private void CancelDelete() => _deleteCandidate = null;
+
+    private async Task DeleteContactAsync(ContactProfileDto contact)
+    {
+        _deleteCandidate = null;
+
+        await ContactStorage.DeleteAsync(_accountId, contact.PeerUserId);
+        await RefreshAsync();
+        Snackbar.Add($"Контакт «{contact.DisplayName}» удалён", Severity.Success);
     }
 
     private async Task SaveAsync()

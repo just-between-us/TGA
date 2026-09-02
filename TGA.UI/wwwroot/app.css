@@ -326,3 +326,33 @@
         mask-image: none !important;
     }
 }
+
+
+
+.mud-list-item {
+    position: relative;
+}
+
+.chat-actions-popup {
+    position: absolute;
+    top: 50%;
+    right: 40px;
+    transform: translateY(-50%);
+    z-index: 10;
+    background-color: var(--mud-palette-surface);
+    border-radius: var(--mud-default-borderradius);
+    box-shadow: var(--mud-elevation-4);
+    padding: 8px;
+    min-width: 100px;
+}
+
+.menu-actions-box .mud-button {
+    justify-content: flex-start;
+}
+
+.confirm-delete-box {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}

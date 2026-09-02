@@ -9,4 +9,5 @@ public interface IContactStorageService
     Task<List<ContactDto>> GetAllAsync(int accountId);
     Task UpdateAvatarAsync(int accountId, long peerUserId, byte[]? avatarData);
     Task<string?> GetDisplayNameAsync(int accountId, long peerUserId);
+    Task DeleteAsync(int accountId, long peerUserId);
 }

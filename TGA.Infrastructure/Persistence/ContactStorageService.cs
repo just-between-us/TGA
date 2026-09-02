@@ -117,5 +117,37 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
             .FirstOrDefaultAsync();
     }
 
+    public async Task DeleteAsync(int accountId, long peerUserId)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+
+        var contact = await db.Contacts.FirstOrDefaultAsync(c =>
+            c.TelegramAccountId == accountId && c.PeerUserId == peerUserId);
+
+        if (contact is null) return;
+
+        var chatId = await db.Chats
+            .Where(c => c.TelegramAccountId == accountId && c.PeerId == peerUserId)
+            .Select(c => (int?)c.Id)
+            .FirstOrDefaultAsync();
+
+        await using var transaction = await db.Database.BeginTransactionAsync();
+
+        await db.ContactProfiles.Where(p => p.ContactId == contact.Id).ExecuteDeleteAsync();
+
+        if (chatId is not null)
+        {
+            await db.Messages.Where(m => m.ChatId == chatId.Value).ExecuteDeleteAsync();
+            await db.Chats.Where(c => c.Id == chatId.Value).ExecuteDeleteAsync();
+        }
+
+        await db.AgentRuns
+            .Where(r => r.TelegramAccountId == accountId && r.PeerUserId == peerUserId)
+            .ExecuteDeleteAsync();
+        await db.Contacts.Where(c => c.Id == contact.Id).ExecuteDeleteAsync();
+
+        await transaction.CommitAsync();
+    }
+
     private static bool IsGenericName(string name) => name.StartsWith("User ");
 }
