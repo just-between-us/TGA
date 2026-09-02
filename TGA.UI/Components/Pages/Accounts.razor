@@ -16,11 +16,18 @@
             <MudListItem>
                 <div class="d-flex align-center justify-space-between">
                     <div class="d-flex">
-                        <MudAvatar Color="Color.Primary" Class="mr-3">@GetInitials(acc.DisplayName)</MudAvatar>
+                        @if (acc.AvatarData is { Length: > 0 })
+                        {
+                            <MudAvatar Class="mr-3">
+                                <MudImage Src="@GetAvatarUrl(acc.AvatarData)" Alt="Аватар аккаунта" />
+                            </MudAvatar>
+                        }
+                        else
+                        {
+                            <MudAvatar Color="Color.Primary" Class="mr-3">@GetInitials(acc.DisplayName)</MudAvatar>
+                        }
                         <div>
-                            <MudText>
-                                @acc.DisplayName
-                            </MudText>
+                            <MudText>@acc.DisplayName</MudText>
                             <MudText Typo="Typo.caption">@acc.PhoneNumber</MudText>
                         </div>
                     </div>
@@ -92,5 +99,9 @@
             1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
             _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
         };
+    }
+
+    private static string GetAvatarUrl(byte[] avatarData) =>
+        $"data:image/jpeg;base64,{Convert.ToBase64String(avatarData)}";
     }
 }

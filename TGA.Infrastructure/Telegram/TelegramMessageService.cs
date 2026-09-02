@@ -160,6 +160,7 @@ public class TelegramMessageService(
     private async Task<MessageDto?> ConvertToDto(Client client, Message message)
     {
         if (message.peer_id is not PeerUser peerUser) return null;
+        
 
         var isOutgoing = message.flags.HasFlag(Message.Flags.out_);
         var userId = isOutgoing ? peerUser.user_id : message.Peer.ID;

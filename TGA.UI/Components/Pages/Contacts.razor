@@ -93,17 +93,23 @@
                                    OnClick="ResolveNameFromTelegramAsync" />
                 </MudTooltip>
             </div>
+            <MudAlert Class="mb-2" Severity="Severity.Info">Данные о контакте и инструкции будут использоваться для генерации ответа (agent) и принятия решения надо-ли отвечать вообще (triage).</MudAlert>
 
             <MudTextField @bind-Value="_notes" Label="Заметки о собеседнике"
+                          Sizing="InputSizing.Auto"
                           Lines="3" Variant="Variant.Outlined" Class="mb-3" />
 
             <MudTextField @bind-Value="_behaviorProfile" Label="Поведенческий профиль"
                           Lines="4" Variant="Variant.Outlined" Class="mb-3"
-                          HelperText="Как человек обычно общается, его манера речи, паттерны поведения" />
+                          Sizing="InputSizing.Auto"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.SmartToy" AdornmentColor="Color.Primary"
+                          HelperText="Как человек обычно общается, его манера речи, паттерны поведения (для агента)" />
 
             <MudTextField @bind-Value="_communicationStyle" Label="Стиль общения"
                           Variant="Variant.Outlined" Class="mb-3"
-                          HelperText="Кратко: формально/неформально, эмодзи, длина сообщений и т.п." />
+                          Sizing="InputSizing.Auto"
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.FilterList" AdornmentColor="Color.Secondary"
+                          HelperText="Кратко: формально/неформально, эмодзи, длина сообщений и т.п. (для triage)" />
 
             <MudDivider Class="my-3" />
 
@@ -122,6 +128,7 @@
             
             <MudTextField @bind-Value="_autoReplyInstructions" Label="Доп. инструкция для автоответа"
                           Lines="3" Variant="Variant.Outlined" Class="mt-3"
+                          Sizing="InputSizing.Auto"
                           Disabled="@(!_autoReplyEnabled)"
                           HelperText="Добавляется к системному промпту именно для этого контакта" />
         }

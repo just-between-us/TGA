@@ -71,26 +71,6 @@
                 </MudButton>
             </MudStack>
         </MudPaper>
-
-        <MudPaper Class="pa-4" Elevation="2">
-            <MudText Typo="Typo.h6" Class="mb-2">Роли</MudText>
-            <MudText Typo="Typo.caption" Class="mb-3">
-                Какой профиль использовать для каждой задачи. "Авто" — текущий профиль по умолчанию.
-            </MudText>
-
-            @foreach (var assignment in _roleAssignments)
-            {
-                <MudSelect T="int?" Value="assignment.ProviderSettingsId"
-                           ValueChanged="v => OnRoleAssignedAsync(assignment.Role, v)"
-                           Label="@RoleLabel(assignment.Role)" Variant="Variant.Outlined" Class="mb-3">
-                    <MudSelectItem T="int?" Value="null">Авто (профиль по умолчанию)</MudSelectItem>
-                    @foreach (var p in _profiles.OrderBy(p => p.Name))
-                    {
-                        <MudSelectItem T="int?" Value="p.Id">@p.Name</MudSelectItem>
-                    }
-                </MudSelect>
-            }
-        </MudPaper>
     </MudItem>
 
     <MudItem xs="12" md="6">
@@ -129,7 +109,6 @@
 
 @code {
     private List<LlmProviderSettingsDto> _profiles = [];
-    private List<LlmRoleAssignmentDto> _roleAssignments = [];
     private int? _editingProfileId;
 
     private string _name = string.Empty;
@@ -150,7 +129,6 @@
     private async Task ReloadAsync(int? preferredProfileId)
     {
         _profiles = await SettingsStorage.GetAllAsync();
-        _roleAssignments = await RoleAssignments.GetAllAsync();
 
         var toLoad = preferredProfileId is { } id
             ? _profiles.FirstOrDefault(p => p.Id == id)
@@ -234,17 +212,6 @@
         await SettingsStorage.DeleteAsync(id);
         Snackbar.Add("Профиль удалён", Severity.Info);
         await ReloadAsync(null); // назначения ролей на удалённый профиль откатятся на "авто" через SetNull в БД
-    }
-
-    private async Task OnRoleAssignedAsync(LlmUsageRole role, int? providerSettingsId)
-    {
-        if (providerSettingsId is { } id)
-            await RoleAssignments.AssignAsync(role, id);
-        else
-            await RoleAssignments.ClearAsync(role);
-
-        _roleAssignments = await RoleAssignments.GetAllAsync();
-        Snackbar.Add("Назначение роли обновлено", Severity.Success);
     }
 
     private static string RoleLabel(LlmUsageRole role) => role switch

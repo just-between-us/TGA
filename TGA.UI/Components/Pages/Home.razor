@@ -94,12 +94,21 @@
             {
                 <MudPaper Class="pa-3 mb-2" Elevation="0">
                     <div class="d-flex align-center justify-space-between flex-wrap" style="gap: 8px;">
-                        <div class="d-flex align-center" style="gap: 8px;">
-                            <MudText Typo="Typo.subtitle1">@acc.DisplayName</MudText>
-                            @if (acc.IsActive)
+                        <div class="d-flex">
+                            @if (acc.AvatarData is { Length: > 0 })
                             {
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">используется сейчас</MudChip>
+                                <MudAvatar Class="mr-3">
+                                    <MudImage Src="@GetAvatarUrl(acc.AvatarData)" Alt="Аватар аккаунта" />
+                                </MudAvatar>
                             }
+                            else
+                            {
+                                <MudAvatar Color="Color.Primary" Class="mr-3">@GetInitials(acc.DisplayName)</MudAvatar>
+                            }
+                            <div>
+                                <MudText>@acc.DisplayName</MudText>
+                                <MudText Typo="Typo.caption">@acc.PhoneNumber</MudText>
+                            </div>
                         </div>
                         <MudChip T="string" Variant="Variant.Text" Color="Color.Primary">ID: @acc.Id</MudChip>
                     </div>
@@ -339,6 +348,20 @@
                 return "Аккаунты";
         }
     }
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
+        };
+    }
+
+    private static string GetAvatarUrl(byte[] avatarData) =>
+        $"data:image/jpeg;base64,{Convert.ToBase64String(avatarData)}";
 
     public void Dispose()
     {

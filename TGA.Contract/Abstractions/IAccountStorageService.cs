@@ -12,4 +12,5 @@ public interface IAccountStorageService
     Task<byte[]?> GetSessionDataAsync(int accountId);
     Task<AccountDto?> GetByIdAsync(int accountId);
     Task UpdateSessionDataAsync(int accountId, byte[] sessionData);
+    Task UpdateAvatarAsync(int accountId, byte[]? avatarData);
 }

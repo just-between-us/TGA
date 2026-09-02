@@ -1,6 +1,10 @@
 ﻿@page "/agent-settings"
 @using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs.Llm
+@using TGA.Domain.Enums
+@inject ILlmSettingsStorageService LlmSettingsStorage
 @inject IRuntimeSettingsStorageService SettingsStorage
+@inject ILlmRoleAssignmentService RoleAssignments
 @inject ISnackbar Snackbar
 
 <PageTitle>Настройки автоответчика</PageTitle>
@@ -13,11 +17,11 @@
             <MudText Typo="Typo.h6" Class="mb-3">Буфер и триаж</MudText>
             <MudStack Spacing="4">
                 <MudNumericField @bind-Value="_debounceSeconds" Label="Пауза перед реакцией (сек)"
-                                  Variant="Variant.Outlined" Min="1" Max="120" />
+                                 Variant="Variant.Outlined" Min="1" Max="120" />
                 <MudNumericField @bind-Value="_maxWaitExtensions" Label="Макс. продлений ожидания (Wait)"
-                                  Variant="Variant.Outlined" Min="0" Max="20" />
+                                 Variant="Variant.Outlined" Min="0" Max="20" />
                 <MudNumericField @bind-Value="_historyContextSize" Label="Сообщений истории в контексте"
-                                  Variant="Variant.Outlined" Min="1" Max="100" />
+                                 Variant="Variant.Outlined" Min="1" Max="100" />
             </MudStack>
         </MudPaper>
     </MudItem>
@@ -27,21 +31,53 @@
             <MudText Typo="Typo.h6" Class="mb-3">ReAct-агент</MudText>
             <MudStack Spacing="4">
                 <MudNumericField @bind-Value="_maxClarifications" Label="Макс. уточняющих вопросов подряд"
-                                  Variant="Variant.Outlined" Min="0" Max="10" />
+                                 Variant="Variant.Outlined" Min="0" Max="10" />
                 <MudNumericField @bind-Value="_maxToolIterations" Label="Макс. итераций tool-calling за один запуск"
-                                  Variant="Variant.Outlined" Min="1" Max="30" />
+                                 Variant="Variant.Outlined" Min="1" Max="30" />
                 <MudNumericField @bind-Value="_ghostStyleExampleCount" Label="Примеров стиля для режима 'Призрак'"
-                                  Variant="Variant.Outlined" Min="0" Max="50" />
+                                 Variant="Variant.Outlined" Min="0" Max="50" />
             </MudStack>
         </MudPaper>
     </MudItem>
 </MudGrid>
 
-<MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="SaveAsync" Disabled="_saving">
-    Сохранить
-</MudButton>
+<div style="width: 100%;" class="d-flex justify-center">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Size="Size.Large" OnClick="SaveAsync" Disabled="@_saving">
+        Сохранить 
+        @if(_saving) {<MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true"/>}
+    </MudButton>
+</div>
+
+
+<MudPaper Class="pa-4 mt-4" Elevation="2">
+    <MudStack Spacing="2">
+        <MudText Typo="Typo.h6">Роли</MudText>
+        <MudText Typo="Typo.caption">
+           Установите какой профиль использовать для каждой задачи.
+        </MudText>
+
+        <MudAlert Severity="Severity.Info">
+            "Авто" — текущий профиль по умолчанию.
+        </MudAlert>
+
+        @foreach (var assignment in _roleAssignments)
+        {
+            <MudSelect T="int?" Value="assignment.ProviderSettingsId"
+                       ValueChanged="v => OnRoleAssignedAsync(assignment.Role, v)"
+                       Label="@RoleLabel(assignment.Role)" Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem T="int?" Value="null">Авто (профиль по умолчанию)</MudSelectItem>
+                @foreach (var p in _profiles.OrderBy(p => p.Name))
+                {
+                    <MudSelectItem T="int?" Value="p.Id">@p.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </MudStack>
+</MudPaper>
 
 @code {
+    private List<LlmProviderSettingsDto> _profiles = [];
+    private List<LlmRoleAssignmentDto> _roleAssignments = [];
     private int _debounceSeconds;
     private int _maxWaitExtensions;
     private int _historyContextSize;
@@ -52,6 +88,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _profiles = await LlmSettingsStorage.GetAllAsync();
+        _roleAssignments = await RoleAssignments.GetAllAsync();
+        
         var s = await SettingsStorage.GetAsync();
         _debounceSeconds = s.DebounceSeconds;
         _maxWaitExtensions = s.MaxWaitExtensions;
@@ -59,6 +98,17 @@
         _maxClarifications = s.MaxClarifications;
         _maxToolIterations = s.MaxToolIterations;
         _ghostStyleExampleCount = s.GhostStyleExampleCount;
+    }
+    
+    private async Task OnRoleAssignedAsync(LlmUsageRole role, int? providerSettingsId)
+    {
+        if (providerSettingsId is { } id)
+            await RoleAssignments.AssignAsync(role, id);
+        else
+            await RoleAssignments.ClearAsync(role);
+
+        _roleAssignments = await RoleAssignments.GetAllAsync();
+        Snackbar.Add("Назначение роли обновлено", Severity.Success);
     }
 
     private async Task SaveAsync()
@@ -80,4 +130,11 @@
             _saving = false;
         }
     }
+    
+    private static string RoleLabel(LlmUsageRole role) => role switch
+    {
+        LlmUsageRole.Triage => "Триаж",
+        LlmUsageRole.Agent => "Агент",
+        _ => role.ToString()
+    };
 }

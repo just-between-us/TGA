@@ -12,6 +12,7 @@ public class TelegramAuthService : ITelegramAuthService
     private readonly IConnectionStatusService _connectionStatus;
     private readonly TelegramLoginPrompt _loginPrompt;
     private readonly TelegramSessionRestorer _sessionRestorer;
+    private readonly ITelegramAvatarService _avatarService;
     private readonly ILogger<TelegramAuthService> _logger;
     private readonly SemaphoreSlim _authLock = new(1, 1);
 
@@ -22,6 +23,7 @@ public class TelegramAuthService : ITelegramAuthService
         IConnectionStatusService connectionStatus,
         TelegramLoginPrompt loginPrompt,
         TelegramSessionRestorer sessionRestorer,
+        ITelegramAvatarService avatarService,
         ILogger<TelegramAuthService> logger)
     {
         _clientFactory = clientFactory;
@@ -30,6 +32,7 @@ public class TelegramAuthService : ITelegramAuthService
         _connectionStatus = connectionStatus;
         _loginPrompt = loginPrompt;
         _sessionRestorer = sessionRestorer;
+        _avatarService = avatarService;
         _logger = logger;
 
         _loginPrompt.StepRequested += OnLoginStepRequested;
@@ -64,7 +67,8 @@ public class TelegramAuthService : ITelegramAuthService
                 var user = await Task.Run(() => client.LoginUserIfNeeded());
 
                 var sessionData = _clientFactory.GetCurrentSessionBytes();
-                await _accountStorage.SaveAccountAsync(user.ID, GetDisplayName(user), user.phone, sessionData);
+                var accountId = await _accountStorage.SaveAccountAsync(user.ID, GetDisplayName(user), user.phone, sessionData);
+                await _avatarService.RefreshAsync(accountId, user.ID, user.access_hash);
 
                 IsLoggedIn = true;
                 CurrentStep = AuthStep.Done;

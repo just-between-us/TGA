@@ -10,6 +10,7 @@ public record SessionRestoreResult(bool Success, string? DisplayName);
 public class TelegramSessionRestorer(
     TelegramClientFactory clientFactory,
     IAccountStorageService accountStorage,
+    ITelegramAvatarService avatarService,
     ILogger<TelegramSessionRestorer> logger)
 {
     public async Task<SessionRestoreResult> TryRestoreAsync(
@@ -25,6 +26,7 @@ public class TelegramSessionRestorer(
 
         await accountStorage.SetActiveAsync(accountId);
         await accountStorage.UpdateSessionDataAsync(accountId, clientFactory.GetCurrentSessionBytes());
+        await avatarService.RefreshAsync(accountId, user.ID, user.access_hash);
 
         return new SessionRestoreResult(true, displayName);
     }

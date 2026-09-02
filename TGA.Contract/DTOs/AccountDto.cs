@@ -5,6 +5,7 @@ public record AccountDto(
     long TelegramUserId,
     string DisplayName,
     string? PhoneNumber,
+    byte[]? AvatarData,
     bool IsActive,
     DateTime CreatedAt,
     DateTime? LastLoginAt);
