@@ -88,7 +88,7 @@ public class ChatStorageService(IDbContextFactory<AppDbContext> dbFactory) : ICh
                 if (lastMessages.TryGetValue(c.Id, out var info))
                 {
                     return new ChatSummaryDto(
-                        c.Id, c.PeerId, displayName,
+                        c.Id, c.PeerId, displayName, c.Contact?.AvatarData,
                         info.Last.Text, info.Last.Time, info.Last.IsOutgoing,
                         info.Count, c.Contact is not null);
                 }
@@ -96,14 +96,14 @@ public class ChatStorageService(IDbContextFactory<AppDbContext> dbFactory) : ICh
                 if (c.TopMessageText is not null)
                 {
                     return new ChatSummaryDto(
-                        c.Id, c.PeerId, displayName,
+                        c.Id, c.PeerId, displayName, c.Contact?.AvatarData,
                         c.TopMessageText, c.TopMessageTime ?? c.LastSyncedAt ?? DateTime.MinValue,
                         c.TopMessageIsOutgoing ?? false,
                         0, c.Contact is not null);
                 }
 
                 return new ChatSummaryDto(
-                    c.Id, c.PeerId, displayName,
+                    c.Id, c.PeerId, displayName, c.Contact?.AvatarData,
                     "Нажмите, чтобы загрузить историю", c.LastSyncedAt ?? DateTime.MinValue, false,
                     0, c.Contact is not null);
             })

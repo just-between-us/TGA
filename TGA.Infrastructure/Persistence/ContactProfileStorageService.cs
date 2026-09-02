@@ -21,6 +21,7 @@ public class ContactProfileStorageService(IDbContextFactory<AppDbContext> dbFact
             select new ContactProfileDto(
                 contact.PeerUserId,
                 contact.DisplayName,
+                contact.AvatarData,
                 profile != null ? profile.Notes : null,
                 profile != null ? profile.BehaviorProfile : null,
                 profile != null ? profile.CommunicationStyle : null,

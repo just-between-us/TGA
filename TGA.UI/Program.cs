@@ -9,10 +9,10 @@ using TGA.Infrastructure.Persistence;
 using TGA.UI.Components;
 
 var builder = WebApplication.CreateBuilder(args);
-var logSink = new TGA.Infrastructure.Diagnostics.InMemoryLogSink();
+var logSink = new InMemoryLogSink();
 
-builder.Services.AddSingleton<TGA.Contract.Abstractions.IDebugLogSink>(logSink);
-builder.Logging.AddProvider(new TGA.Infrastructure.Diagnostics.InMemoryLoggerProvider(logSink));
+builder.Services.AddSingleton<IDebugLogSink>(logSink);
+builder.Logging.AddProvider(new InMemoryLoggerProvider(logSink));
 
 TaskScheduler.UnobservedTaskException += (sender, args) =>
 {

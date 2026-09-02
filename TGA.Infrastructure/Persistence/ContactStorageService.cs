@@ -56,8 +56,16 @@ public class ContactStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
         return await db.Contacts
             .Where(c => c.TelegramAccountId == accountId)
             .OrderBy(c => c.DisplayName)
-            .Select(c => new ContactDto(c.PeerUserId, c.DisplayName))
+            .Select(c => new ContactDto(c.PeerUserId, c.DisplayName, c.AvatarData))
             .ToListAsync();
+    }
+
+    public async Task UpdateAvatarAsync(int accountId, long peerUserId, byte[]? avatarData)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync();
+        await db.Contacts
+            .Where(c => c.TelegramAccountId == accountId && c.PeerUserId == peerUserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.AvatarData, avatarData));
     }
     public async Task RenameAsync(int accountId, long peerUserId, string newName)
     {

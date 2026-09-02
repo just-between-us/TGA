@@ -51,6 +51,9 @@
                 else if (Auth.CurrentStep == AuthStep.Done)
                 {
                     <MudAlert Severity="Severity.Success" Class="mb-3">Успешно подключено!</MudAlert>
+                    <MudCheckBox @bind-Value="_loadAvatars" Color="Color.Primary" Class="mb-3">
+                        Загружать аватары контактов
+                    </MudCheckBox>
                     <MudButton Color="Color.Primary" FullWidth="true" OnClick="SyncAndContinue" Disabled="@_syncing">
                         @(_syncing ? "Синхронизация диалогов..." : "Загрузить диалоги")
                     </MudButton>
@@ -82,6 +85,7 @@
     private string? _syncError = null;
     private bool _loading;
     private bool _syncing;
+    private bool _loadAvatars = true;
 
     protected override void OnInitialized()
     {
@@ -139,7 +143,7 @@
 
         try
         {
-            await MessageService.SyncDialogsAsync();
+            await MessageService.SyncDialogsAsync(_loadAvatars);
             MessageService.StartMonitoring();
             NavigationManager.NavigateTo("/chats");
         }

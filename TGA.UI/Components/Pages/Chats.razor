@@ -4,6 +4,7 @@
 @using TGA.Contract.DTOs
 @using TGA.Contract.Options
 @using TGA.Domain.Enums
+@using TGA.UI.HelperServices
 @using TGA.UI.Utils
 @inject IConnectionStatusService ConnectionStatus
 @inject IMessageStorageService Storage
@@ -55,9 +56,18 @@
                                          OnClick="() => SelectChat(chat.PeerUserId)"
                                          Class="@(chat.PeerUserId == _selectedPeerId ? "mud-selected-item" : "")">
                                 <div class="d-flex align-center" style="width: 100%;">
-                                    <MudAvatar Class="mr-3">
-                                        @GetInitials(chat.DisplayName)
-                                    </MudAvatar>
+                                    @if (chat.AvatarData is { Length: > 0 })
+                                    {
+                                        <MudAvatar Class="mr-3">
+                                            <MudImage  Src="@GetAvatarUrl(chat.AvatarData)" Alt="Аватар чата" />
+                                        </MudAvatar>
+                                    }
+                                    else
+                                    {
+                                        <MudAvatar Class="mr-3" Style="@("background-color:" + AvatarColorHelper.GetColorForId(chat.ChatId))">
+                                            @GetInitials(chat.DisplayName)
+                                        </MudAvatar>
+                                    }
 
                                     <div style="flex: 1; min-width: 0;">
                                         <div class="d-flex justify-space-between">
@@ -194,6 +204,9 @@
         string.IsNullOrWhiteSpace(_search)
             ? _chats
             : _chats.Where(c => c.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private static string GetAvatarUrl(byte[] avatarData) =>
+        $"data:image/jpeg;base64,{Convert.ToBase64String(avatarData)}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -378,13 +391,11 @@
 
     private static string GetInitials(string name)
     {
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
-            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
-        };
+        if (string.IsNullOrWhiteSpace(name))
+            return "?";
+    
+        var firstWord = name.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return firstWord?.Length > 0 ? firstWord[0].ToString().ToUpper() : "?";
     }
 
     private static string FormatTime(DateTime time)

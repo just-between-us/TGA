@@ -1,3 +1,3 @@
 ﻿namespace TGA.Contract.DTOs;
 
-public record ContactDto(long PeerUserId, string DisplayName);
+public record ContactDto(long PeerUserId, string DisplayName, byte[]? AvatarData);

@@ -54,7 +54,7 @@ public class TelegramSessionRestoreHostedService(
 
             try
             {
-                await messageService.SyncDialogsAsync();
+                await messageService.SyncDialogsAsync(loadAvatars: false);
 
                 logger.LogInformation(
                     "Синхронизация диалогов после восстановления завершена");

@@ -10,10 +10,11 @@ public class TelegramDialogSyncService(
     IAccountStorageService accountStorage,
     IContactStorageService contactStorage,
     IChatStorageService chatStorage,
+    ITelegramAvatarService avatarService,
     IConnectionStatusService connectionStatus,
     ILogger<TelegramDialogSyncService> logger)
 {
-    public async Task<int> SyncDialogsAsync(Client client)
+    public async Task<int> SyncDialogsAsync(Client client, bool loadAvatars = true)
 {
     var active = await accountStorage.GetActiveAccountAsync()
         ?? throw new InvalidOperationException("Нет активного аккаунта");
@@ -59,6 +60,10 @@ public class TelegramDialogSyncService(
             peerDirectory.RememberPeer(peerUser.user_id, new InputPeerUser(user.ID, user.access_hash));
             peerDirectory.RememberDialogTopMessage(peerUser.user_id, dialog.TopMessage);
             await contactStorage.UpsertAsync(active.Id, peerUser.user_id, TelegramPeerDirectory.DisplayName(user));
+            if (loadAvatars)
+            {
+                await avatarService.RefreshContactAsync(active.Id, user.ID, user.access_hash);
+            }
         }
 
         count++;

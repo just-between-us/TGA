@@ -9,6 +9,7 @@ public class TelegramContactSyncService(
     TelegramPeerDirectory peerDirectory,
     IAccountStorageService accountStorage,
     IContactStorageService contactStorage,
+    ITelegramAvatarService avatarService,
     ILogger<TelegramContactSyncService> logger)
 {
     public async Task<int> SyncAsync(Client client)
@@ -38,6 +39,7 @@ public class TelegramContactSyncService(
                 peerDirectory.RememberPeer(contact.user_id, new InputPeerUser(user.ID, user.access_hash));
 
             await contactStorage.UpsertAsync(active.Id, contact.user_id, TelegramPeerDirectory.DisplayName(user));
+            await avatarService.RefreshContactAsync(active.Id, user.ID, user.access_hash);
             count++;
         }
 

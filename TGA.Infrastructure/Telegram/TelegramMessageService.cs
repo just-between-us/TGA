@@ -21,10 +21,10 @@ public class TelegramMessageService(
     public event Action<MessageDto>? OnNewMessageReceived;
     public bool IsMonitoring { get; private set; }
 
-    public async Task<int> SyncDialogsAsync()
+    public async Task<int> SyncDialogsAsync(bool loadAvatars = true)
     {
         var client = RequireClient();
-        return await dialogSyncService.SyncDialogsAsync(client);
+        return await dialogSyncService.SyncDialogsAsync(client, loadAvatars);
     }
 
     public async Task<List<MessageDto>> LoadChatHistoryAsync(long peerUserId, int limit, long offsetMessageId = 0)

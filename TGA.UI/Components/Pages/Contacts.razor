@@ -54,7 +54,21 @@
                 <MudTh></MudTh>
             </HeaderContent>
             <RowTemplate>
-                <MudTd DataLabel="Имя">@context.DisplayName</MudTd>
+                <MudTd DataLabel="Имя">
+                    <div class="d-flex align-center" style="gap: 8px;">
+                        @if (context.AvatarData is { Length: > 0 })
+                        {
+                            <MudAvatar Size="Size.Small">
+                                <MudImage Src="@GetAvatarUrl(context.AvatarData)" Alt="Аватар контакта" />
+                            </MudAvatar>
+                        }
+                        else
+                        {
+                            <MudAvatar Size="Size.Small" Color="Color.Primary">@GetInitials(context.DisplayName)</MudAvatar>
+                        }
+                        <span>@context.DisplayName</span>
+                    </div>
+                </MudTd>
                 <MudTd DataLabel="Автоответчик">
                     @if (context.AutoReplyEnabled)
                     {
@@ -164,6 +178,20 @@
         string.IsNullOrWhiteSpace(_search)
             ? _contacts
             : _contacts.Where(c => c.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private static string GetAvatarUrl(byte[] avatarData) =>
+        $"data:image/jpeg;base64,{Convert.ToBase64String(avatarData)}";
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
+        };
+    }
 
     protected override async Task OnInitializedAsync()
     {
