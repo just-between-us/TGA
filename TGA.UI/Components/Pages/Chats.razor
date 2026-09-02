@@ -21,21 +21,26 @@
 
 <MudContainer MaxWidth="MaxWidth.False" Class="mt-4" Style="height: calc(100vh - 100px);">
     <MudGrid Style="height: 100%;">
-
         @* Левая панель — список чатов *@
         <MudItem xs="12" md="4" Style="height: 100%;">
             <MudPaper Class="d-flex flex-column" Style="height: 100%;" Elevation="2">
                 <div class="pa-3">
-                    <MudTextField T="string" Placeholder="Поиск чата" Adornment="Adornment.Start"
+                    <MudTextField T="string" 
+                                  Placeholder="Поиск чата" 
+                                  Adornment="Adornment.Start"
                                   AdornmentIcon="@Icons.Material.Filled.Search"
-                                  Value="_search" ValueChanged="OnSearchChanged"
-                                  Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                  Value="_search" 
+                                  ValueChanged="OnSearchChanged"
+                                  Immediate="true" 
+                                  Variant="Variant.Outlined" 
+                                  Margin="Margin.Dense"/>
                 </div>
                 @if (!_isConnected)
                 {
-                    <MudAlert Severity="Severity.Warning">Вы не подключены к аккаунту или сети!</MudAlert>
+                    <MudAlert Severity="Severity.Warning">
+                        Вы не подключены к аккаунту или сети!
+                    </MudAlert>
                 }
-
                 @if (_loadingContacts)
                 {
                     <MudProgressLinear Indeterminate="true" Class="mt-2" />
@@ -48,11 +53,16 @@
                 }
                 else
                 {
-                    <MudList T="long" Style="overflow-y: auto; flex: 1;">
+                    <MudList T="long?"
+                             Style="overflow-y: auto; flex: 1;"
+                             @bind-SelectedValue="_selectedPeerId">
+                        
                         @foreach (var chat in FilteredChats)
                         {
                             <MudListItem T="long"
-                                         OnClick="() => SelectChat(chat.PeerUserId)">
+                                         OnClick="@(() => SelectChat(chat.PeerUserId))"
+                                         Value="@chat.PeerUserId">
+
                                 <div class="d-flex align-center" style="width: 100%;">
                                     @if (chat.AvatarData is { Length: > 0 })
                                     {
@@ -66,16 +76,22 @@
                                             @GetInitials(chat.DisplayName)
                                         </MudAvatar>
                                     }
-
+                                    
                                     <div style="flex: 1; min-width: 0;">
                                         <div class="d-flex justify-space-between">
-                                            <MudText Typo="Typo.subtitle2" Style="color: azure" Class="text-truncate">@chat.DisplayName</MudText>
+                                            <MudText Typo="Typo.subtitle2"
+                                                     Class="text-truncate">
+                                                @chat.DisplayName
+                                            </MudText>
                                         </div>
-                                        <MudText Typo="Typo.body2" Color="Color.Surface" Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                            @(chat.LastMessageIsOutgoing ? "Вы: " : "")@chat.LastMessageText
+                                        <MudText Typo="Typo.body2"
+                                                 Color="Color.Surface"
+                                                 Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                            @(chat.LastMessageIsOutgoing ? "Вы:" : "") @chat.LastMessageText
                                         </MudText>
                                     </div>
-                                    <MudText Class="pt-1" Typo="Typo.caption" Style="color: var(--mud-palette-action-default) !important;">
+                                    
+                                    <MudText Class="pt-1 ml-2" Typo="Typo.caption">
                                         @FormatTime(chat.LastMessageTime)
                                     </MudText>
 
@@ -86,7 +102,7 @@
                                                            Size="Size.Small"
                                                            Color="Color.Secondary"
                                                            OnClick="@(() => AddAsContactAsync(chat))"
-                                                           OnClick:stopPropagation="true" />
+                                                           OnClick:stopPropagation="true"/>
                                         </MudTooltip>
                                     }
 
@@ -102,15 +118,22 @@
                                             @if (_confirmDeletePeerId == chat.PeerUserId)
                                             {
                                                 <div class="confirm-delete-box">
-                                                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-2">Удалить чат?</MudText>
+                                                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mb-2">
+                                                        Удалить чат?
+                                                    </MudText>
+                                                    
                                                     <div class="d-flex justify-space-between gap-4">
                                                         <MudButton Size="Size.Small" Variant="Variant.Outlined"
                                                                    OnClick="@(() => CancelDelete(chat.PeerUserId))"
-                                                                   OnClick:stopPropagation="true">Нет</MudButton>
+                                                                   OnClick:stopPropagation="true">
+                                                            Нет
+                                                        </MudButton>
                                                         <MudButton Size="Size.Small" Color="Color.Error"
                                                                    Variant="Variant.Filled"
                                                                    OnClick="@(() => DeleteChatConfirmedAsync(chat))"
-                                                                   OnClick:stopPropagation="true">Да</MudButton>
+                                                                   OnClick:stopPropagation="true">
+                                                            Да
+                                                        </MudButton>
                                                     </div>
                                                 </div>
                                             }
@@ -121,7 +144,9 @@
                                                                StartIcon="@Icons.Material.Filled.DeleteOutline"
                                                                FullWidth="true"
                                                                OnClick="@(() => RequestDelete(chat.PeerUserId))"
-                                                               OnClick:stopPropagation="true">Удалить</MudButton>
+                                                               OnClick:stopPropagation="true">
+                                                        Удалить
+                                                    </MudButton>
                                                 </div>
                                             }
                                         </div>
@@ -141,7 +166,9 @@
                 @if (_selectedPeerId is null)
                 {
                     <div class="d-flex flex-column align-center justify-center" style="height: 100%;">
-                        <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Large" Color="Color.Secondary" />
+                        
+                        <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" Size="Size.Large" Color="Color.Secondary"/>
+                        
                         <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mt-2">
                             Выберите чат слева
                         </MudText>
@@ -150,11 +177,21 @@
                 else
                 {
                     <div class="pa-3 d-flex align-center" style="border-bottom: 1px solid var(--mud-palette-lines-default);">
-                        <MudText Typo="Typo.h6">@_selectedName</MudText>
+                        <MudText Typo="Typo.h6">
+                            @_selectedName
+                        </MudText>
+                        @if (_typingPeerId == _selectedPeerId && DateTime.UtcNow - _typingAt < TimeSpan.FromSeconds(4))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Primary" Class="ml-2">печатает...</MudText>
+                        }
                     </div>
-                    <MudTooltip Color="Color.Info" Arrow="true" Placement="Placement.Left"
+                    <MudTooltip Color="Color.Info" 
+                                Arrow="true" 
+                                Placement="Placement.Left"
                                 Text="@(TelegramSvc.IsMonitoring ? "Сервис готов принять новые сообщения" : "Приём новых сообщений остановлен (из-за аккаунта или ошибки)")">
-                        <MudText Typo="Typo.caption" Class="ma-4" Color="Color.Surface">
+                        <MudText Typo="Typo.caption" 
+                                 Class="ma-4" 
+                                 Color="Color.Surface">
                             @(TelegramSvc.IsMonitoring ? "Жду сообщения..." : "Сообщения не получаются.")
                         </MudText>
                     </MudTooltip>
@@ -180,7 +217,9 @@
                         }
                         else if (_messages.Count == 0)
                         {
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Сообщений пока нет</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Сообщений пока нет
+                            </MudText>
                         }
                         else
                         {
@@ -193,7 +232,7 @@
                                               Elevation="1">
                                         <MudText Style="white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;">@msg.Text</MudText>
                                         <MudText Typo="Typo.caption"
-                                                 Style="@($"display:block; text-align:right; opacity:0.7;")">
+                                                 Style="@("display:block; text-align:right; opacity:0.7;")">
                                             @msg.Time.ToString("HH:mm")
                                         </MudText>
                                     </MudPaper>
@@ -203,11 +242,16 @@
                     </div>
 
                     <div class="pa-3 d-flex" style="border-top: 1px solid var(--mud-palette-lines-default);">
-                        <MudTextField @bind-Value="_draft" Placeholder="Написать сообщение..."
-                                      Variant="Variant.Outlined" Margin="Margin.Dense"
-                                      Immediate="true" FullWidth="true" Class="mr-2"
+                        <MudTextField @bind-Value="_draft" 
+                                      Placeholder="Написать сообщение..."
+                                      Variant="Variant.Outlined" 
+                                      Margin="Margin.Dense"
+                                      Immediate="true" 
+                                      FullWidth="true" 
+                                      Class="mr-2"
                                       OnKeyUp="OnDraftKeyUp" />
-                        <MudIconButton Icon="@Icons.Material.Filled.Send" Color="Color.Primary"
+                        <MudIconButton Icon="@Icons.Material.Filled.Send" 
+                                       Color="Color.Primary"
                                        Disabled="@(string.IsNullOrWhiteSpace(_draft) || _sending)"
                                        OnClick="SendMessageAsync" />
                     </div>
@@ -233,6 +277,9 @@
     private bool _hasMoreHistory = true;
     private bool _sending;
     private bool _isConnected;
+    private long? _typingPeerId;
+    private DateTime _typingAt;
+    private CancellationTokenSource? _typingCts;
     private string _draft = string.Empty;
     private int _historyLimit;
     private DotNetObjectReference<Chats>? _dotNetRef;
@@ -263,6 +310,7 @@
         _loadingContacts = false;
 
         TelegramSvc.OnNewMessageReceived += OnNewMessage;
+        TelegramSvc.OnUserTyping += OnUserTyping;
     }
 
     protected override void OnAfterRender(bool firstRender)
@@ -283,6 +331,7 @@
     private async Task SelectChat(long peerUserId)
     {
         _selectedPeerId = peerUserId;
+        TelegramSvc.SubscribeToTyping(peerUserId);
         _selectedName = _chats.FirstOrDefault(c => c.PeerUserId == peerUserId)?.DisplayName ?? "Неизвестно";
         _hasMoreHistory = true;
 
@@ -452,6 +501,42 @@
         });
     }
 
+    private void OnUserTyping(long peerUserId)
+    {
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
+        _typingCts = new CancellationTokenSource();
+        var cancellationToken = _typingCts.Token;
+
+        InvokeAsync(() =>
+        {
+            _typingPeerId = peerUserId;
+            _typingAt = DateTime.UtcNow;
+            StateHasChanged();
+        });
+
+        _ = ClearTypingAsync(peerUserId, cancellationToken);
+    }
+
+    private async Task ClearTypingAsync(long peerUserId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken);
+            await InvokeAsync(() =>
+            {
+                if (_typingPeerId == peerUserId)
+                {
+                    _typingPeerId = null;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
     private async Task ScrollToBottomAsync()
     {
         try
@@ -496,6 +581,9 @@
     public async ValueTask DisposeAsync()
     {
         TelegramSvc.OnNewMessageReceived -= OnNewMessage;
+        TelegramSvc.OnUserTyping -= OnUserTyping;
+        _typingCts?.Cancel();
+        _typingCts?.Dispose();
         _dotNetRef?.Dispose();
         await ValueTask.CompletedTask;
     }

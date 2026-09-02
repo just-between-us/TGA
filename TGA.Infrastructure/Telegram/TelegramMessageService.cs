@@ -19,7 +19,9 @@ public class TelegramMessageService(
     ILogger<TelegramMessageService> logger) : ITelegramMessageService
 {
     public event Action<MessageDto>? OnNewMessageReceived;
+    public event Action<long>? OnUserTyping;
     public bool IsMonitoring { get; private set; }
+    private readonly HashSet<long> _typingSubscriptions = [];
 
     public async Task<int> SyncDialogsAsync(bool loadAvatars = true)
     {
@@ -98,6 +100,12 @@ public class TelegramMessageService(
         var client = clientFactory.GetCurrent();
         client.OnUpdates -= HandleUpdates;
         IsMonitoring = false;
+        _typingSubscriptions.Clear();
+    }
+
+    public void SubscribeToTyping(long peerUserId)
+    {
+        _typingSubscriptions.Add(peerUserId);
     }
 
     public async Task<MessageDto> SendMessageAsync(long peerUserId, string text)
@@ -134,8 +142,14 @@ public class TelegramMessageService(
     {
         foreach (var update in updates.UpdateList)
         {
-            if (update is UpdateNewMessage { message: Message message })
+            if (update is UpdateUserTyping typing && _typingSubscriptions.Contains(typing.user_id))
+            {
+                OnUserTyping?.Invoke(typing.user_id);
+            }
+            else if (update is UpdateNewMessage { message: Message message })
+            {
                 await ProcessNewMessage(message);
+            }
         }
     }
     

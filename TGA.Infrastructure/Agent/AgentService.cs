@@ -38,7 +38,7 @@ public class AgentService(
             new(LlmRole.User, BuildInitialUserPrompt(triggerMessages, recentHistory, profile))
         };
         
-        logger.LogInformation("Сообщений для контекста: {messages}", messages.Count);
+        logger.LogInformation("Сообщений для контекста: {messages}", messages[1].Content);
         
 
         await RunLoopAsync(accountId, peerUserId, messages, clarificationCount: 0, profile.Mode, settings, ct);
@@ -80,7 +80,7 @@ public class AgentService(
             var toolDefs = BuildToolDefinitions(clarificationCount >= settings.MaxClarifications);
             var request = new LlmChatRequest(messages, llmSettings.Model, llmSettings.Temperature, Tools: toolDefs);
 
-            logger.LogInformation("Запускаю {iteration} итерацию агентного цикла", iteration++);
+            logger.LogInformation("Запускаю {iteration} итерацию агентного цикла", iteration+1);
             
             LlmChatResult result;
             
@@ -100,7 +100,7 @@ public class AgentService(
             {
                 await telegramMessageService.SendMessageAsync(peerUserId, result.Content ?? "Не знаю, что ответить."); //TODO: финальный fallback (llm не смогла ответить) -> в настройки
                 
-                logger.LogInformation("(Агент решил не вызывать инструмент) Ответил {peerUserId}: {result.Content}", peerUserId, result.Content);
+                logger.LogInformation("(Агент решил не вызывать инструмент) Ответил {peerUserId} (на {iteration} итерации): {result.Content}", peerUserId, iteration+1, result.Content);
                 
                 await runStorage.MarkCompletedAsync(accountId, peerUserId);
                 return;
