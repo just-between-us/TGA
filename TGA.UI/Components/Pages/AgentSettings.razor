@@ -62,13 +62,21 @@
 
         @foreach (var assignment in _roleAssignments)
         {
-            <MudSelect T="int?" Value="assignment.ProviderSettingsId"
+            <MudSelect T="int?" 
+                       AdornmentColor="@(assignment.Role == LlmUsageRole.Agent? Color.Primary : Color.Secondary)"
+                       AdornmentIcon="@(assignment.Role == LlmUsageRole.Agent? Icons.Material.Filled.SmartToy : Icons.Material.Filled.FilterList)"
+                       Value="assignment.ProviderSettingsId"
                        ValueChanged="v => OnRoleAssignedAsync(assignment.Role, v)"
-                       Label="@RoleLabel(assignment.Role)" Variant="Variant.Outlined" Class="mb-3">
-                <MudSelectItem T="int?" Value="null">Авто (профиль по умолчанию)</MudSelectItem>
+                       Label="@RoleLabel(assignment.Role)" 
+                       Variant="Variant.Outlined" Class="mb-3">
+                <MudSelectItem T="int?" Value="null">
+                    Авто (профиль по умолчанию)
+                </MudSelectItem>
                 @foreach (var p in _profiles.OrderBy(p => p.Name))
                 {
-                    <MudSelectItem T="int?" Value="p.Id">@p.Name</MudSelectItem>
+                    <MudSelectItem T="int?" Value="p.Id">
+                        @p.Name
+                    </MudSelectItem>
                 }
             </MudSelect>
         }

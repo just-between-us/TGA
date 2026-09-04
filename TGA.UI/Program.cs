@@ -7,6 +7,7 @@ using TGA.Infrastructure;
 using TGA.Infrastructure.Diagnostics;
 using TGA.Infrastructure.Persistence;
 using TGA.UI.Components;
+using TGA.UI.HelperServices;
 
 var builder = WebApplication.CreateBuilder(args);
 var logSink = new InMemoryLogSink();
@@ -29,6 +30,8 @@ builder.Services.Configure<HistoryLoadOptions>(builder.Configuration.GetSection(
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment.ContentRootPath);
+
+builder.Services.AddScoped<ThemeService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

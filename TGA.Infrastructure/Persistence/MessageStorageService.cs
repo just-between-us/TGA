@@ -87,6 +87,17 @@ public class MessageStorageService(IDbContextFactory<AppDbContext> dbFactory) : 
 
         return sb.ToString();
     }
+
+    public async Task<List<MessageStatisticsSourceDto>> GetStatisticsMessagesAsync(
+        int accountId, DateTime from, DateTime toExclusive, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        return await db.Messages
+            .Where(m => m.TelegramAccountId == accountId && m.Time >= from && m.Time < toExclusive)
+            .Select(m => new MessageStatisticsSourceDto(m.Time, m.IsOutgoing, m.PeerUserId, m.ContactName))
+            .ToListAsync(ct);
+    }
     
 
     public async Task<List<MessageDto>> GetMessagesByPeerAsync(int accountId, long peerUserId)

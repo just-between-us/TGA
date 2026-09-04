@@ -1,12 +1,14 @@
 ﻿@inherits LayoutComponentBase
-@inject ITelegramOtherUpdateNotifier OtherUpdates
-@inject ISnackbar Snackbar
 @using TGA.Contract.Abstractions
 @using TGA.Contract.DTOs
 @using TGA.Domain.Enums
+@using TGA.UI.HelperServices
 @using TGA.UI.Shared.TgaAnimatedBackground
 @using TGA.UI.Shared.TgaLogo
+@inject ISnackbar Snackbar
+@inject ITelegramOtherUpdateNotifier OtherUpdates
 @inject IConnectionStatusService ConnectionStatus
+@inject ThemeService ThemeService
 @implements IDisposable
 
 <MudThemeProvider Theme="@_theme" IsDarkMode="_isDarkMode"/>
@@ -51,6 +53,8 @@
     protected override void OnInitialized()
     {
         base.OnInitialized();
+        
+        _isDarkMode = ThemeService.IsDarkMode;
 
         _theme = new()
         {
@@ -58,8 +62,17 @@
             PaletteDark = _darkPalette,
             LayoutProperties = new LayoutProperties()
         };
+        
+        ThemeService.OnThemeChanged += OnThemeChanged;
+        
         ConnectionStatus.StateChanged += OnConnectionStateChanged;
         OtherUpdates.OtherUpdateReceived += OnOtherUpdateReceived;
+    }
+
+    private void OnThemeChanged()
+    {
+        _isDarkMode = ThemeService.IsDarkMode;
+        StateHasChanged();
     }
 
     private void OnConnectionStateChanged()
@@ -115,7 +128,7 @@
 
     private void DarkModeToggle()
     {
-        _isDarkMode = !_isDarkMode;
+        ThemeService.ToggleTheme();
     }
 
     private readonly PaletteLight _lightPalette = new()

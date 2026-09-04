@@ -1,0 +1,333 @@
+@page "/statistics"
+@using TGA.Contract.Abstractions
+@using TGA.Contract.DTOs
+@using TGA.UI.HelperServices
+@inject IStatisticsService StatisticsService
+@inject IAccountStorageService Accounts
+@inject NavigationManager NavigationManager
+@inject ThemeService ThemeService
+@implements IDisposable
+
+<PageTitle>Статистика</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6 mb-6">
+    <div class="d-flex align-center mb-6" style="gap: 16px; flex-wrap: wrap;">
+        <MudDatePicker Label="С" @bind-Date="_from" DateFormat="dd.MM.yyyy" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        <MudDatePicker Label="По" @bind-Date="_to" DateFormat="dd.MM.yyyy" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+        <MudSelect T="StatisticsGrouping" Label="Группировка активности" @bind-Value="_grouping"
+                   Variant="Variant.Outlined" Margin="Margin.Dense">
+            <MudSelectItem Value="StatisticsGrouping.Day">По дням</MudSelectItem>
+            <MudSelectItem Value="StatisticsGrouping.Week">По неделям</MudSelectItem>
+            <MudSelectItem Value="StatisticsGrouping.Month">По месяцам</MudSelectItem>
+        </MudSelect>
+        
+        <MudButton Variant="Variant.Filled" 
+                   Color="Color.Primary" 
+                   StartIcon="@Icons.Material.Filled.Refresh" 
+                   Disabled="@_loading"
+                   OnClick="LoadAsync">
+            Обновить
+        </MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="mb-4" />
+    }
+    else if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+    }
+    else if (_statistics is not null)
+    {
+        
+        <MudGrid Class="pb-6">
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.caption" Color="Color.Primary">Всего сообщений</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-1">@_statistics.TotalMessages</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.caption" Color="Color.Primary">Входящие</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-1">@_statistics.IncomingMessages</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.caption" Color="Color.Primary">Исходящие</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-1">@_statistics.OutgoingMessages</MudText>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.caption" Color="Color.Primary">Активных контактов</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-1">@_statistics.ActiveContacts</MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="pb-6">
+            <MudItem xs="12">
+                <MudPaper Class="pa-3" Style="height: 430px;">
+                    <MudText Typo="Typo.h6" Class="mb-1">Общая активность</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary" Class="d-block">@($"Среднее: {_statistics.AverageMessagesPerDay} сообщения в день")</MudText>
+                    <MudChart T="double" 
+                              Class="mb-2"
+                              ChartType="ChartType.Bar" 
+                              ChartSeries="@_activitySeries"
+                              ChartOptions="@_barChartOptions"
+                              ChartLabels="_activityLabels"
+                              MatchBoundsToSize="true"
+                              Height="340px"
+                              Width="100%" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="5">
+                <MudPaper Class="pa-3">
+                    <MudText Typo="Typo.h6" Class="mb-3">Активность по контактам</MudText>
+                    <MudChart T="double" 
+                              ChartType="ChartType.Donut" 
+                              ChartSeries="@_contactSeries"
+                              ChartLabels="@_contactLabels"
+                              Height="280px"
+                              Width="100%"/>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="7">
+                <MudPaper Class="pa-3">
+                    <MudText Typo="Typo.h6" Class="mb-1">Активность ваших сообщений</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Primary">Исходящие сообщения по дню недели и часу</MudText>
+                    <MudChart T="double" 
+                              ChartType="ChartType.HeatMap" 
+                              ChartSeries="@_heatmapSeries"
+                              ChartLabels="@_heatmapLabels"
+                              ChartOptions="@_heatmapOptions"
+                              Height="360px" 
+                              Width="100%" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+        
+        <MudPaper Class="pa-3 mb-6" Elevation="1">
+            
+            <div class="d-flex align-center mb-3">
+                <MudText Typo="Typo.h6">
+                    Огоньки общения
+                </MudText>
+
+                <MudTooltip Color="Color.Info" Arrow="true" Placement="Placement.Top"
+                            Text="Огонёк появляется, если переписка с контактом шла минимум 3 календарных дня подряд в выбранном периоде.">
+                    <MudIconButton Icon="@Icons.Material.Filled.Info"
+                                   Size="Size.Small" Color="Color.Primary"
+                                   Class="ml-1"/>
+                </MudTooltip>
+            </div>
+
+            @if (_statistics.ConversationStreaks.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    За выбранный период серий общения от 3 дней не найдено.
+                </MudText>
+            }
+            else
+            {
+                <MudGrid Spacing="3">
+                    @foreach (var streak in _statistics.ConversationStreaks)
+                    {
+                        var isActive = streak.CurrentDays >= 3;
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudPaper Class="pa-3" Outlined="true">
+                                <div class="d-flex" style="gap: 12px;">
+                                    @if (streak.AvatarData is { Length: > 0 })
+                                    {
+                                        <MudAvatar Size="Size.Medium">
+                                            <MudImage Src="@GetAvatarUrl(streak.AvatarData)" Alt="Аватар контакта"/>
+                                        </MudAvatar>
+                                    }
+                                    else
+                                    {
+                                        <MudAvatar Size="Size.Small" Color="Color.Primary">@GetInitials(streak.ContactName)</MudAvatar>
+                                    }
+                                    <div style="width: 100%">
+                                        <div class="d-flex align-center justify-space-between">
+                                            <div style="min-width: 0;">
+                                                <MudText Typo="Typo.subtitle2" Class="text-truncate">
+                                                    @streak.ContactName
+                                                </MudText>
+                                                <MudText Typo="Typo.caption" Color="@(isActive ? Color.Secondary : Color.Default)">
+                                                    @(isActive ? "Серия продолжается" : "Лучшая серия в периоде")
+                                                </MudText>
+                                            </div>
+                                            <div class="d-flex align-center">
+                                                <MudIcon Class="pr-1" Size="Size.Small"
+                                                         Icon="@Icons.Material.Filled.LocalFireDepartment"
+                                                         Color="@(isActive ? Color.Warning : Color.Default)"/>
+                                                <MudText Typo="Typo.h6" Color="@(isActive ? Color.Warning : Color.Default)">
+                                                    @streak.CurrentDays дн.
+                                                </MudText>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex align-center justify-space-between">
+                                            <MudText Typo="Typo.caption" Color="Color.Primary" Class="d-block mt-2">
+                                                лучший результат:
+                                            </MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Primary" Class="d-block mt-2">
+                                                @streak.BestDays дн.
+                                            </MudText>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    public bool IsDarkMode { get; set; } = true; 
+    
+    private readonly string[] _lightPalette = ["#DCEEFF", "#72B7FF", "#1677D2", "#083B73"];
+    private readonly string[] _darkPalette = ["#333333", "#244563", "#3B6F9F", "#0083FF"];
+
+    
+    private DateTime? _from = DateTime.Today.AddDays(-29);
+    private DateTime? _to = DateTime.Today;
+    private StatisticsGrouping _grouping = StatisticsGrouping.Day;
+    private StatisticsDto? _statistics;
+    private bool _loading = true;
+    private string? _error;
+    
+    private List<ChartSeries<double>> _activitySeries = [];
+    private string[] _activityLabels = [];
+    
+    private List<ChartSeries<double>> _contactSeries = [];
+    private string[] _contactLabels = [];
+    
+    private List<ChartSeries<double>> _heatmapSeries = [];
+    private readonly string[] _heatmapLabels = Enumerable.Range(0, 24).Select(hour => $"{hour:00}").ToArray();
+    
+    private readonly BarChartOptions _barChartOptions = new()
+    {
+        ShowLegend = false,
+        XAxisLabelRotation = -90,  
+    };
+    
+    private HeatMapChartOptions _heatmapOptions = new();
+    
+    private void BuildHeatmapOptions()
+    {
+        var palette = IsDarkMode ? _darkPalette : _lightPalette;
+        _heatmapOptions = new HeatMapChartOptions
+        {
+            ShowLabels = false,
+            ShowLegend = false,
+            ShowToolTips = true,
+            ChartPalette = palette,
+            XAxisLabelPosition = XAxisLabelPosition.Top,
+            YAxisLabelPosition = YAxisLabelPosition.Left
+        };
+    }
+    protected override void OnInitialized()
+    {
+        ThemeService.OnThemeChanged += OnThemeChanged;  // подписка
+        BuildHeatmapOptions();                          // построить начальные опции
+        base.OnInitialized();
+    }
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private void OnThemeChanged()
+    {
+        IsDarkMode = ThemeService.IsDarkMode;
+        BuildHeatmapOptions();
+        StateHasChanged();
+    }
+    
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var account = await Accounts.GetActiveAccountAsync();
+            if (account is null)
+            {
+                NavigationManager.NavigateTo("/login");
+                return;
+            }
+
+            if (_from is null || _to is null)
+                throw new InvalidOperationException("Укажите обе даты.");
+
+            _statistics = await StatisticsService.GetAsync(
+                account.Id,
+                new StatisticsRequestDto(_from.Value, _to.Value, _grouping));
+            BuildCharts(_statistics);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void BuildCharts(StatisticsDto statistics)
+    {
+        _activityLabels = statistics.Activity.Select(item => item.Label).ToArray();
+        _activitySeries =
+        [
+            new ChartSeries<double>
+            {
+                Name = "Сообщения",
+                Data = statistics.Activity.Select(item => (double)item.Count).ToArray()
+            }
+        ];
+
+        _contactLabels = statistics.Contacts.Select(item => item.ContactName).ToArray();
+        _contactSeries =
+        [
+            new ChartSeries<double>
+            {
+                Name = "Сообщения",
+                Data = statistics.Contacts.Select(item => (double)item.Count).ToArray()
+            }
+        ];
+
+        _heatmapSeries = statistics.OutgoingByWeekdayAndHour
+            .Select(row => new ChartSeries<double>
+            {
+                Name = row.Label,
+                Data = row.Values.Select(value => (double)value).ToArray()
+            })
+            .ToList();
+    }
+
+    private static string GetAvatarUrl(byte[] avatarData) =>
+        $"data:image/jpeg;base64,{Convert.ToBase64String(avatarData)}";
+
+    private static string GetInitials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpper(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpper()
+        };
+    }
+    
+    public void Dispose()
+    {
+        ThemeService.OnThemeChanged -= OnThemeChanged; 
+    }
+}
