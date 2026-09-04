@@ -21,37 +21,45 @@ public class ExportImportService(
 
         var json = await File.ReadAllTextAsync(filePath, ct);
 
-        var export = JsonSerializer.Deserialize<TelegramExportDto>(json, new JsonSerializerOptions
+        var options = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            AllowTrailingCommas = true
-        }) ?? throw new InvalidOperationException("Не удалось разобрать файл экспорта");
+            AllowTrailingCommas = true,
+            ReadCommentHandling = JsonCommentHandling.Skip
+        };
+
+        using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        });
+        var chats = ReadChats(document.RootElement, options);
 
         var result = new List<ChatPreviewDto>();
 
-        foreach (var chat in export.Chats.List)
+        foreach (var chat in chats)
         {
             ct.ThrowIfCancellationRequested();
 
             var chatName = string.IsNullOrWhiteSpace(chat.Name) ? $"User {chat.Id}" : chat.Name!;
 
-            var messages = chat.Messages
+            var messages = (chat.Messages ?? [])
                 .Select(m => new
                 {
                     Raw = m,
-                    Text = CleanText(m.Text)
+                    Text = CleanText(BuildMessageText(m))
                 })
-                .Where(m => !string.IsNullOrWhiteSpace(m.Text))
+                .Where(m => m.Raw.Id > 0 && m.Raw.Date is not null && !string.IsNullOrWhiteSpace(m.Text))
                 .Select(m => new MessagePreviewDto(
                     m.Raw.Id,
-                    m.Raw.Date,
+                    m.Raw.Date!.Value,
                     string.IsNullOrWhiteSpace(m.Raw.From) ? chatName : m.Raw.From!,
                     m.Text,
-                    IsFromMe(m.Raw.FromId, account.TelegramUserId)))
+                    IsFromMe(m.Raw.FromId, m.Raw.From, account.TelegramUserId)))
                 .OrderBy(m => m.Date)
                 .ToList();
 
-            result.Add(new ChatPreviewDto(chat.Id, chatName, chat.Type, chat.IsPersonalChat, messages));
+            result.Add(new ChatPreviewDto(chat.Id, chatName, chat.Type, IsPersonalChat(chat.Type), messages));
         }
 
         logger.LogInformation("Разобрано {Count} чатов из {File}", result.Count, filePath);
@@ -98,11 +106,18 @@ public class ExportImportService(
         return new ImportSummaryDto(personalChats.Count, imported, skipped);
     }
 
-    private static bool IsFromMe(string? fromId, long myTelegramUserId)
+    private static bool IsFromMe(string? fromId, string? from, long myTelegramUserId)
     {
-        if (string.IsNullOrEmpty(fromId)) return false;
-        var digits = Regex.Match(fromId, @"\d+").Value;
-        return long.TryParse(digits, out var parsedId) && parsedId == myTelegramUserId;
+        if (!string.IsNullOrWhiteSpace(fromId))
+        {
+            var digits = Regex.Match(fromId, @"\d+").Value;
+            if (long.TryParse(digits, out var parsedId))
+                return parsedId == myTelegramUserId;
+        }
+
+        return from is not null && (from.Equals("Me", StringComparison.OrdinalIgnoreCase) ||
+                                    from.Equals("Saved Messages", StringComparison.OrdinalIgnoreCase) ||
+                                    from.Equals("Избранное", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsSystemMessage(string text) =>
@@ -120,5 +135,64 @@ public class ExportImportService(
             text = text.Replace("  ", " ");
 
         return text.Trim();
+    }
+
+    private static List<TelegramChatDto> ReadChats(JsonElement root, JsonSerializerOptions options)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("Корень файла экспорта должен быть JSON-объектом.");
+
+        if (TryGetPropertyIgnoreCase(root, "chats", out var chatsElement) &&
+            chatsElement.ValueKind == JsonValueKind.Object &&
+            TryGetPropertyIgnoreCase(chatsElement, "list", out var listElement) &&
+            listElement.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<TelegramChatDto>>(listElement.GetRawText(), options) ?? [];
+        }
+
+        if (TryGetPropertyIgnoreCase(root, "messages", out var messagesElement) &&
+            messagesElement.ValueKind == JsonValueKind.Array)
+        {
+            var chat = JsonSerializer.Deserialize<TelegramChatDto>(root.GetRawText(), options);
+            return chat is null ? [] : [chat];
+        }
+
+        throw new InvalidOperationException(
+            "Файл не похож на экспорт Telegram: не найден chats.list или messages.");
+    }
+
+    private static bool TryGetPropertyIgnoreCase(
+        JsonElement element, string propertyName, out JsonElement value)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (property.Name.Equals(propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static bool IsPersonalChat(string? type) => type?.ToLowerInvariant() is
+        "personal_chat" or "saved_messages";
+
+    private static string BuildMessageText(TelegramMessageDto message)
+    {
+        if (!string.IsNullOrWhiteSpace(message.Text)) return message.Text;
+
+        var media = new[]
+        {
+            message.Photo is not null ? $"Фото: {message.Photo}" : null,
+            message.Video is not null ? $"Видео: {message.Video}" : null,
+            message.Audio is not null ? $"Аудио: {message.Audio}" : null,
+            message.File is not null ? $"Файл: {message.File}" : null,
+            message.VoiceMessage ? "Голосовое сообщение" : null
+        }.Where(value => value is not null);
+
+        return string.Join("; ", media!);
     }
 }

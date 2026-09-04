@@ -8,7 +8,7 @@ public class TelegramMessageDto
     public long Id { get; set; }
 
     [JsonPropertyName("date")]
-    public DateTime Date { get; set; }
+    public DateTime? Date { get; set; }
 
     [JsonPropertyName("from")]
     public string? From { get; set; }
@@ -19,4 +19,19 @@ public class TelegramMessageDto
     [JsonPropertyName("text")]
     [JsonConverter(typeof(TelegramTextJsonConverter))]
     public string Text { get; set; } = string.Empty;
+
+    [JsonPropertyName("photo")]
+    public string? Photo { get; set; }
+
+    [JsonPropertyName("video")]
+    public string? Video { get; set; }
+
+    [JsonPropertyName("audio")]
+    public string? Audio { get; set; }
+
+    [JsonPropertyName("file")]
+    public string? File { get; set; }
+
+    [JsonPropertyName("voice_message")]
+    public bool VoiceMessage { get; set; }
 }

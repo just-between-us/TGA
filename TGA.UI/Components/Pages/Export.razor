@@ -221,16 +221,21 @@
         try
         {
             var tempPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.json");
-
-            await using (var stream = _selectedFile.OpenReadStream(maxAllowedSize: 500_000_000))
-            await using (var fileStream = File.Create(tempPath))
+            try
             {
-                await stream.CopyToAsync(fileStream);
+                await using (var stream = _selectedFile.OpenReadStream(maxAllowedSize: 500_000_000))
+                await using (var fileStream = File.Create(tempPath))
+                {
+                    await stream.CopyToAsync(fileStream);
+                }
+
+                _chats = await ExportImportService.ParseAsync(tempPath, _activeAccountId.Value);
             }
-
-            _chats = await ExportImportService.ParseAsync(tempPath, _activeAccountId.Value);
-
-            File.Delete(tempPath);
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
 
             _hasParsed = true;
             Snackbar.Add($"Готово! Обработано чатов: {_chats.Count}", Severity.Success);
@@ -275,7 +280,11 @@
         }
     }
 
-    private void OnRowClicked(TableRowClickEventArgs<ChatPreviewDto> args) => OpenChat(args.Item);
+    private void OnRowClicked(TableRowClickEventArgs<ChatPreviewDto> args)
+    {
+        if (args.Item is not null)
+            OpenChat(args.Item);
+    }
 
     private void OpenChat(ChatPreviewDto chat)
     {

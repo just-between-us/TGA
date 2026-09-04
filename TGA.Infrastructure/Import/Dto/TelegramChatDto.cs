@@ -14,7 +14,7 @@ public class TelegramChatDto
     public long Id { get; set; }
 
     [JsonPropertyName("messages")]
-    public List<TelegramMessageDto> Messages { get; set; } = [];
+    public List<TelegramMessageDto>? Messages { get; set; }
 
     [JsonIgnore]
     public bool IsPersonalChat => Type is "personal_chat" or "saved_messages";
